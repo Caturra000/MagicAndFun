@@ -6,6 +6,7 @@ enum class State {
     READY,
     DONE,
     TIMEOUT,
+    CANCEL,
 };
 
 // shared

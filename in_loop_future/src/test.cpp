@@ -63,6 +63,9 @@ int main() {
             }
             return true;
         })
+        .self([](Future<FakePoller> &myself) {
+            std::cout << "self call?" << std::endl;
+        })
         .then([&stopFlag](FakePoller&) {
             stopFlag = true;
             return nullptr;

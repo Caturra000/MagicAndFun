@@ -17,6 +17,9 @@ public:
         if(_shared->_state == State::NEW) {
             _shared->_value = std::move(value);
             _shared->_state = State::READY;
+        } else if(_shared->_state == State::CANCEL) {
+            // ignore
+            return;
         } else {
             throw std::runtime_error("promise can only set once.");
         }
