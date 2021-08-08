@@ -170,6 +170,27 @@ public:
         return promise.get();
     }
 
+    // receive: bool(T) bool(T&) bool(T&&)
+    // return: Future<T>
+    template <typename Functor,
+              typename Check = typename std::enable_if<
+                    IsThenValid<Future<T>, Functor>::value
+                    && std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value>::type>
+    Future<T> poll(Functor f) {
+        Promise<T> promise(_looper);
+        // reuse _then
+        setCallback([this, f = std::move(f), promise](T &&value) mutable {
+            // T will copy, we need retry, so cannot move this value
+            // T& / T&& is ok
+            if(f(std::forward<T>(value))) {
+                promise.setValue(std::move(value));
+            } else {
+                _looper->yield();
+            }
+        });
+        return promise.get();
+    }
+
     // then() should have 2 overload method
     // if f(T), user must not use yield(), so just promise.setValue, f(T) will move current future value
     // if f(T reference), user will use yield(), test f(), then setValue (but how? callback-again?)

@@ -49,27 +49,28 @@ int main() {
         }
     }
 
-    // Promise<FakePoller> promise2(&looper);
-    // stopFlag = false;
-    // add = false;
-    // auto fut22 = promise2.get()
-    //     .then([&looper](FakePoller &&poller) {
-    //         if(!poller.poll()) {
-    //             std::cout << "oops" << std::endl;
-    //             looper.yield();
-    //             return poller;
-    //         }
-    //         return poller;
-    //     })
-    //     .then([&stopFlag](FakePoller) {
-    //         stopFlag = true;
-    //         return nullptr;
-    //     });
-    // for(; !stopFlag;) {
-    //     looper.loop();
-    //     if(!add) {
-    //         promise2.setValue(FakePoller{});
-    //     }
-    // }
+    Promise<FakePoller> promise2(&looper);
+    stopFlag = false;
+    add = false;
+    auto fut22 = promise2.get()
+        .poll([&looper](FakePoller &&poller) {
+            if(!poller.poll()) {
+                std::cout << "oops" << std::endl;
+                return false;
+            }
+            return true;
+        })
+        .then([&stopFlag](FakePoller) {
+            std::cout << "ok!" << std::endl;
+            stopFlag = true;
+            return nullptr;
+        });
+    for(; !stopFlag;) {
+        looper.loop();
+        if(!add) {
+            promise2.setValue(FakePoller{});
+            add = true;
+        }
+    }
     return 0;
 }
