@@ -1,5 +1,7 @@
+#pragma once
 #include <bits/stdc++.h>
 #include "FunctionTraits.h"
+#include "FutureTraits.h"
 
 // [experimental]
 // In loop future
@@ -47,8 +49,8 @@ private:
 
 private:
     std::queue<std::function<void()>> _mq;
-    std::function<void()> _lastEvent;
-    int _global {}; // debug
+    std::function<void()>             _lastEvent;
+    int                               _global {}; // debug
 };
 
 
@@ -63,10 +65,10 @@ enum class State {
 // it may be a simple object without shared_ptr (in looper)
 template <typename T>
 struct ControlBlock {
-    State _state;
-    T _value;
-    std::exception_ptr _exception;
-    std::function<void(T)> _then;
+    State                    _state;
+    T                        _value;
+    std::exception_ptr       _exception;
+    std::function<void(T&&)> _then;
 
     ControlBlock(): _state(State::NEW) {}
 };
@@ -93,15 +95,22 @@ public:
 
         if(_shared->_then) {
             _looper->addEvent([shared = _shared] {
+                // TODO remove std::move, because void(T&&) will not be actually moved, just refer to this value
                 shared->_then(std::move(shared->_value));
                 shared->_state = State::DONE;
             });
         }
     }
 
+    // for looper.yield
+    // use && to avoid copy or move
+    void testAndSetValue(T &&value) {
+        f(std::move(value));
+    }
+
     // void setException()...
 
-    void setCallback(std::function<void(T)> f) {
+    void setCallback(std::function<void(T&&)> f) {
         _shared->_then = std::move(f);
     }
 
@@ -133,26 +142,37 @@ public:
         return value;
     }
 
-    void setCallback(std::function<void(T)> f) {
+    // unsafe, hook for yield
+    // ensure: has result
+    // will not change the state
+    T& getReference() {
+        return _shared->value;
+    }
+
+    void setCallback(std::function<void(T&&)> f) {
         _shared->_then = std::move(f);
     }
 
     // must receive functor R(T)
     template <typename Functor,
               typename R = typename FunctionTraits<Functor>::ReturnType,
-              typename Check = std::enable_if<std::is_same<
-                    typename FunctionTraits<Functor>::ArgsTuple,
-                    std::tuple<T>
-                    >::value>>
+              typename Check = typename std::enable_if<
+                    IsThenValid<Future<T>, Functor>::value>::type>
     Future<R> then(Functor f) {
         Promise<R> promise(_looper);
         // async request, will be set value and then callback
-        this/*Future<T>*/->setCallback([f = std::move(f), promise](T value) mutable {
-            // Question. yield?
+        setCallback([f = std::move(f), promise](T &&value) mutable {
+            // f(T) will move current Future<T> value in shared
+            // f(T&) or f(T&&) just use reference
+            // TODO currently f(T&) is invalid
             promise.setValue(f(std::move(value)));
         });
         return promise.get();
     }
+
+    // then() should have 2 overload method
+    // if f(T), user must not use yield(), so just promise.setValue, f(T) will move current future value
+    // if f(T reference), user will use yield(), test f(), then setValue (but how? callback-again?)
 
 private:
     SimpleLooper                     *_looper;
