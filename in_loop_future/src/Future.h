@@ -16,7 +16,8 @@ class Promise;
 template <typename T>
 class Future {
 public:
-    Future(SimpleLooper *looper, std::shared_ptr<ControlBlock<T>> shared)
+    Future(SimpleLooper *looper,
+           const std::shared_ptr<ControlBlock<T>> &shared)
         : _looper(looper),
           _shared(shared) {}
 
