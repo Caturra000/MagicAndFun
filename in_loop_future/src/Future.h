@@ -83,8 +83,11 @@ public:
         }
 
         if(_shared->_then) {
-            _shared->_then(std::move(_shared->_value));
-            _shared->_state = State::DONE;
+            auto shared = _shared;
+            _looper->addEvent([shared = std::move(shared)] {
+                shared->_then(std::move(shared->_value));
+                shared->_state = State::DONE;
+            });
         }
     }
 
@@ -98,7 +101,6 @@ public:
         return Future<T>(_looper, _shared);
     };
 
-    // bool hasResult() { return _shared->_state != State::READY; }
 private:
     SimpleLooper                     *_looper;
     std::shared_ptr<ControlBlock<T>> _shared;
@@ -122,6 +124,10 @@ public:
         return value;
     }
 
+    void setCallback(std::function<void(T)> f) {
+        _shared->_then = std::move(f);
+    }
+
     // must receive functor R(T)
     template <typename Functor,
               typename R = typename FunctionTraits<Functor>::ReturnType,
@@ -131,13 +137,10 @@ public:
                     >::value>>
     Future<R> then(Functor f) {
         Promise<R> promise(_looper);
-        _looper->addEvent([this, promise, f = std::move(f)]() mutable {
-            if(!hasResult()) {
-                _looper->yield();
-                return;
-            }
-            auto value = std::move(this->get());
-            promise.setValue(f(value));
+        // async request, will be set value and then callback
+        this/*Future<T>*/->setCallback([f = std::move(f), promise](T value) mutable {
+            // Question. yield?
+            promise.setValue(f(std::move(value)));
         });
         return promise.get();
     }
