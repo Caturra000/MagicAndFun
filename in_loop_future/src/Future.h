@@ -19,7 +19,7 @@ public:
 
     // unsafe
     void loopOnce() {
-        debug();
+        // debug();
         _lastEvent = std::move(_mq.front());
         _mq.pop();
         _lastEvent();
@@ -85,6 +85,7 @@ public:
     Promise(SimpleLooper *looper)
         : _looper(looper),
           _shared(std::make_shared<ControlBlock<T>>()) {}
+
     void setValue(T value) {
         if(_shared->_state == State::NEW) {
             _shared->_value = std::move(value);
@@ -95,17 +96,11 @@ public:
 
         if(_shared->_then) {
             _looper->addEvent([shared = _shared] {
-                // TODO remove std::move, because void(T&&) will not be actually moved, just refer to this value
-                shared->_then(std::move(shared->_value));
+                // shared->_value may be moved
+                shared->_then(static_cast<T&&>(shared->_value));
                 shared->_state = State::DONE;
             });
         }
-    }
-
-    // for looper.yield
-    // use && to avoid copy or move
-    void testAndSetValue(T &&value) {
-        f(std::move(value));
     }
 
     // void setException()...
@@ -149,51 +144,54 @@ public:
         return _shared->value;
     }
 
-    void setCallback(std::function<void(T&&)> f) {
-        _shared->_then = std::move(f);
-    }
-
-    // must receive functor R(T)
+    // FIXME currently f(T&) is invalid
+    // must receive functor R(T) R(T&) R(T&&)
     template <typename Functor,
               typename R = typename FunctionTraits<Functor>::ReturnType,
               typename Check = typename std::enable_if<
                     IsThenValid<Future<T>, Functor>::value>::type>
     Future<R> then(Functor f) {
         Promise<R> promise(_looper);
+        auto future = promise.get();
         // async request, will be set value and then callback
-        setCallback([f = std::move(f), promise](T &&value) mutable {
+        setCallback([f = std::move(f), promise = std::move(promise)](T &&value) mutable {
             // f(T) will move current Future<T> value in shared
             // f(T&) or f(T&&) just use reference
-            // TODO currently f(T&) is invalid
             promise.setValue(f(std::move(value)));
         });
-        return promise.get();
+        return future;
     }
 
-    // receive: bool(T) bool(T&) bool(T&&)
+    // receive: bool(T&) bool(T&&)
     // return: Future<T>
     template <typename Functor,
-              typename Check = typename std::enable_if<
-                    IsThenValid<Future<T>, Functor>::value
-                    && std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value>::type>
+              bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
+              bool DontReceiveTypeT = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T>>::value,
+              bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
+              typename PollRequired = typename std::enable_if<AtLeastThenValid && DontReceiveTypeT && ShouldReturnBool>::type>
     Future<T> poll(Functor f) {
         Promise<T> promise(_looper);
+        auto future = promise.get();
         // reuse _then
-        setCallback([this, f = std::move(f), promise](T &&value) mutable {
-            // T will copy, we need retry, so cannot move this value
-            // T& / T&& is ok
+        setCallback([f = std::move(f), promise = std::move(promise), looper = _looper](T &&value) mutable {
             if(f(std::forward<T>(value))) {
+                // actually move
                 promise.setValue(std::move(value));
             } else {
-                _looper->yield();
+                looper->yield();
             }
         });
-        return promise.get();
+        return future;
     }
 
-    // then() should have 2 overload method
-    // if f(T), user must not use yield(), so just promise.setValue, f(T) will move current future value
-    // if f(T reference), user will use yield(), test f(), then setValue (but how? callback-again?)
+private:
+    void setCallback(const std::function<void(T&&)> &f) {
+        _shared->_then = f;
+    }
+
+    void setCallback(std::function<void(T&&)> &&f) {
+        _shared->_then = std::move(f);
+    }
 
 private:
     SimpleLooper                     *_looper;

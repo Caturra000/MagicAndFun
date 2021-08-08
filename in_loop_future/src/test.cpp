@@ -3,13 +3,18 @@
 
 
 struct FakePoller {
+    bool flag = false;
+    std::chrono::system_clock::time_point _start {std::chrono::system_clock::now()};
     int _count = 0;
 
     // may be an async-IO operations
     // test yield
     bool poll() {
-        if(_count > 10) return true;
-        _count++;
+        // if(_count >= 10) return true;
+        // _count++;
+        // return false;
+        auto delta = std::chrono::system_clock::now() - _start;
+        if(std::chrono::system_clock::now() - _start >= std::chrono::milliseconds(100)) return true;
         return false;
     }
 };
@@ -21,7 +26,6 @@ int main() {
     bool add = false;
     int count = 0;
     FakePoller poller;
-
     auto fut = promise.get()
         // TODO
         // then argument will change state of shared->_value in different way
@@ -55,22 +59,68 @@ int main() {
     auto fut22 = promise2.get()
         .poll([&looper](FakePoller &&poller) {
             if(!poller.poll()) {
-                std::cout << "oops" << std::endl;
                 return false;
             }
             return true;
         })
         .then([&stopFlag](FakePoller) {
-            std::cout << "ok!" << std::endl;
             stopFlag = true;
             return nullptr;
         });
     for(; !stopFlag;) {
         looper.loop();
         if(!add) {
-            promise2.setValue(FakePoller{});
+            promise2.setValue(poller);
             add = true;
         }
     }
+
+
+
+
+
+    auto start = std::chrono::system_clock::now();
+
+
+    stopFlag = false;
+    add = false;
+    int finished = 0;
+
+    // cannot use promises(100, &looper); will copy same control block!
+    std::vector<Promise<FakePoller>> promises;
+    for(int i = 0; i < 100; ++i) {
+        promises.emplace_back(&looper);
+    }
+
+    for(auto &promise : promises) {
+        auto fut = promise.get()
+            .poll([](FakePoller &&poller) {
+                if(!poller.poll()) return false;
+                return true;
+            })
+            .then([&finished, &stopFlag, &promises](FakePoller &&poller) {
+                finished++;
+                if(finished >= promises.size()) {
+                    stopFlag = true;
+                }
+                return nullptr;
+            });
+    }
+
+    for(; !stopFlag;) {
+        looper.loop();
+        if(!add) {
+            for(auto &promise : promises) {
+                promise.setValue(FakePoller{});
+            }
+            add = true;
+        }
+    }
+
+    auto end = std::chrono::system_clock::now();
+
+    auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "cost: " << delta.count() << std::endl;
+
     return 0;
 }
