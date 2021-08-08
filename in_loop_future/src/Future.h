@@ -17,12 +17,13 @@ public:
 
     // unsafe
     void loopOnce() {
+        debug();
         _lastEvent = std::move(_mq.front());
         _mq.pop();
-        if(_lastEvent) {
-            _lastEvent();
-        }
+        _lastEvent();
     }
+
+    void loopOnceChecked() { if(!_mq.empty()) loopOnce(); }
 
     // TODO
     // receive and return a context object
@@ -34,12 +35,20 @@ public:
     }
 
     void addEvent(std::function<void()> event) {
-        _mq.emplace(std::move(event));
+        if(event) {
+            _mq.emplace(std::move(event));
+        }
+    }
+
+private:
+    void debug() {
+        std::cout << "[loop msg] " << _global++ << std::endl;
     }
 
 private:
     std::queue<std::function<void()>> _mq;
     std::function<void()> _lastEvent;
+    int _global {}; // debug
 };
 
 
@@ -83,8 +92,7 @@ public:
         }
 
         if(_shared->_then) {
-            auto shared = _shared;
-            _looper->addEvent([shared = std::move(shared)] {
+            _looper->addEvent([shared = _shared] {
                 shared->_then(std::move(shared->_value));
                 shared->_state = State::DONE;
             });
@@ -115,7 +123,8 @@ public:
         : _looper(looper),
           _shared(shared) {}
 
-    bool hasResult() { return _shared->_state != State::READY; }
+    // TIMEOUT?
+    bool hasResult() { return _shared->_state != State::NEW; }
 
     // ensure: has result
     T get() {
