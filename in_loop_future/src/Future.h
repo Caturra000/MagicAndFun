@@ -10,15 +10,8 @@
 // In loop future
 // lockfree?
 
-
-
-
 template <typename T>
 class Promise;
-
-
-
-
 
 template <typename T>
 class Future {
@@ -44,20 +37,22 @@ public:
         return _shared->value;
     }
 
-    // FIXME currently f(T&) is invalid
     // must receive functor R(T) R(T&) R(T&&)
     template <typename Functor,
               typename R = typename FunctionTraits<Functor>::ReturnType,
               typename Check = typename std::enable_if<
                     IsThenValid<Future<T>, Functor>::value>::type>
     Future<R> then(Functor f) {
+        // T or T& or T&& ?
+        // using ForwardType = decltype(std::get<0>(std::declval<typename FunctionTraits<Functor>::ArgsTuple>()));
+        using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         Promise<R> promise(_looper);
         auto future = promise.get();
         // async request, will be set value and then callback
         setCallback([f = std::move(f), promise = std::move(promise)](T &&value) mutable {
             // f(T) will move current Future<T> value in shared
             // f(T&) or f(T&&) just use reference
-            promise.setValue(f(std::move(value)));
+            promise.setValue(f(std::forward<ForwardType>(value)));
         });
         return future;
     }
@@ -70,11 +65,12 @@ public:
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
               typename PollRequired = typename std::enable_if<AtLeastThenValid && DontReceiveTypeT && ShouldReturnBool>::type>
     Future<T> poll(Functor f) {
+        using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         Promise<T> promise(_looper);
         auto future = promise.get();
         // reuse _then
         setCallback([f = std::move(f), promise = std::move(promise), looper = _looper](T &&value) mutable {
-            if(f(std::forward<T>(value))) {
+            if(f(std::forward<ForwardType>(value))) {
                 // actually move
                 promise.setValue(std::move(value));
             } else {

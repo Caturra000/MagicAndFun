@@ -63,7 +63,7 @@ int main() {
             }
             return true;
         })
-        .then([&stopFlag](FakePoller) {
+        .then([&stopFlag](FakePoller&) {
             stopFlag = true;
             return nullptr;
         });
