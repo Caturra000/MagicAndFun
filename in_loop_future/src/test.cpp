@@ -61,10 +61,13 @@ int main() {
             if(!poller.poll()) {
                 return false;
             }
+            std::cout << "poll finished" << std::endl;
             return true;
         })
-        .self([](Future<FakePoller> &myself) {
-            std::cout << "self call?" << std::endl;
+        .cancelIf([](FakePoller&) {
+            std::cout << "but I try to cancel this routine. If true, looper will never stop" << std::endl;
+            // return true; // never stop
+            return false; // go on!
         })
         .then([&stopFlag](FakePoller&) {
             stopFlag = true;

@@ -39,6 +39,10 @@ public:
         _shared->_then = std::move(f);
     }
 
+    void cancel() {
+        _shared->_state = State::CANCEL;
+    }
+
     Future<T> get() {
         return Future<T>(_looper, _shared);
     };

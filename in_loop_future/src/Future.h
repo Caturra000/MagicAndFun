@@ -51,6 +51,7 @@ public:
         auto future = promise.get();
         if(_shared->_state == State::CANCEL) {
             // return a future will never be setValue()
+            promise.cancel();
             return future;
         }
         // async request, will be set value and then callback
@@ -75,6 +76,7 @@ public:
         auto future = promise.get();
         if(_shared->_state == State::CANCEL) {
             // return a future will never be setValue()
+            promise.cancel();
             return future;
         }
         // reuse _then
@@ -89,42 +91,31 @@ public:
         return future;
     }
 
-    // TODO like this?
-    // .self([](Future<T>& future) {
-    //      if(...) future.cancel()
-    // });
-    void cancel() {
-        _shared->_state = State::CANCEL;
-    }
-
-    // FIXME then() is registered by the parent future, current future has no {then_}
-    // you can cancel future, check whether cancelled or anything about {*this} here
-    // <del> will call functor immediately </del>
-    // -------> not a good idea? try to bind {then_}
-    // will call functor after then() callback
-    // must use before then() or poll()
-    // receive: void(Future<T>&)
-    // return: Future<T>&
+    // receive: bool(T&) bool(T&&)
+    // return: Future<T>
+    // IMPROVEMENT: return future<T>& ?
     template <typename Functor,
-              bool OnlyReceiveFuture = std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<Future<T>&>>::value,
-              bool MustReturnVoid = std::is_same<typename FunctionTraits<Functor>::ReturnType, void>::value,
-              typename SelfRequired = typename std::enable_if<OnlyReceiveFuture>::type>
-    Future<T>& self(Functor &&f) {
+              bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
+              bool DontReceiveTypeT = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T>>::value,
+              bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
+              typename CancelIfRequired = typename std::enable_if<AtLeastThenValid && DontReceiveTypeT && ShouldReturnBool>::type>
+    Future<T> cancelIf(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
-        if(!_shared->_then) return *this;
-        // has been then() but no callback with value
-        if(_shared->_state == State::NEW) {
-            auto proxy = [this, thenFunctor = std::move(_shared->_then), selfFunctor = std::forward<Functor>(f)](T&& value) {
-                thenFunctor(static_cast<T&&>(value));
-                selfFunctor(*this);
-            };
-            _shared->_then = std::move(proxy);
-        } else if(_shared->_state == State::READY) {
-            // then() has been called so f should call immediately
-            f(*this);
+        Promise<T> promise(_looper);
+        auto future = promise.get();
+        if(_shared->_state == State::CANCEL) {
+            promise.cancel();
+            return future;
         }
-        // else I don't care
-        return *this;
+        setCallback([f = std::forward<Functor>(f), promise = std::move(promise)](T &&value) mutable {
+            if(f(std::forward<ForwardType>(value))) {
+                promise.cancel();
+            } else {
+                // forward the current future to the next
+                promise.setValue(std::move(value));
+            }
+        });
+        return future;
     }
 
 private:
