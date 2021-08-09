@@ -1,6 +1,6 @@
 #include <bits/stdc++.h>
 #include "Future.h"
-
+#include "Futures.h"
 
 struct FakePoller {
     bool flag = false;
@@ -133,6 +133,31 @@ int main() {
 
     auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "cost: " << delta.count() << std::endl;
+
+
+
+
+
+
+    // test whenAll
+
+    auto collectFut0 = makeFuture(&looper, std::string("12345"));
+    auto collectFut1 = makeFuture(&looper, std::vector<int>{1, 2, 3});
+
+    auto all = whenAll(&looper, collectFut0, collectFut1)
+        .then([&stopFlag](std::tuple<std::string, std::vector<int>> &&result) {
+            std::cout << std::get<0>(result) << std::endl
+                      << std::get<1>(result)[0] << std::endl;
+            stopFlag = true;
+            return nullptr;
+        });
+
+    stopFlag = false;
+    for(; !stopFlag;) {
+        looper.loop();
+    }
+
+    std::cout << collectFut1.get().size() << std::endl;
 
     return 0;
 }

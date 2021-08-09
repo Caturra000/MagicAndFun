@@ -37,6 +37,11 @@ public:
         return value;
     }
 
+    // unsafe
+    std::shared_ptr<ControlBlock<T>> getControlBlock() {
+        return _shared;
+    }
+
     // must receive functor R(T) R(T&) R(T&&)
     template <typename Functor,
               typename R = typename FunctionTraits<Functor>::ReturnType,
