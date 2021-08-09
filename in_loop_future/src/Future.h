@@ -64,7 +64,7 @@ public:
         setCallback([f = std::forward<Functor>(f), promise = std::move(promise)](T &&value) mutable {
             // for callback f
             // f(T) and f(T&) will copy current Future<T> value in shared,
-            // - T will copy to your routine
+            // - T will copy to your routine. It is safe to move
             // - T& just use reference where it is in shared state
             // T&& will move the parent future value
             // - T&& just use reference, but moving this value to your routine is unsafe
