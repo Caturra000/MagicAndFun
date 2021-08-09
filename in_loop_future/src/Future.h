@@ -159,6 +159,24 @@ public:
         });
     }
 
+    // receive: bool(T) bool(T&)
+    // return: Future<T>
+    template <typename Functor,
+              bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
+              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+              bool ShouldReturnVoid = std::is_same<typename FunctionTraits<Functor>::ReturnType, void>::value,
+              typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnVoid>::type>
+    Future<T> wait(std::chrono::system_clock::time_point timePoint, Functor &&f) {
+        return poll([f = std::forward<Functor>(f), timePoint](T &self) mutable {
+            auto current = std::chrono::system_clock::now();
+            if(current >= timePoint) {
+                f(self);
+                return true;
+            }
+            return false;
+        });
+    }
+
 private:
     void setCallback(const std::function<void(T&&)> &f) {
         _shared->_then = f;
