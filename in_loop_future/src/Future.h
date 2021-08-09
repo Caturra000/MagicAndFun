@@ -119,10 +119,9 @@ public:
         State state = _shared->_state;
         if(state == State::NEW || state == State::READY) {
             setCallback([f = std::forward<Functor>(f), promise = std::move(promise), looper = _looper, count](T &&value) mutable {
-                if(f(static_cast<CastType>(value)) || count == 0) {
+                if(count-- == 0 || f(static_cast<CastType>(value))) {
                     promise.setValue(std::forward<ForwardType>(value));
                 } else {
-                    --count;
                     looper->yield();
                 }
             });
