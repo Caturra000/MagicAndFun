@@ -4,10 +4,10 @@
 // IN PROGRESS: DIED state
 enum class State {
     // newcomer, mengxin
-    // it may has _then
+    // it may have _then
     NEW,
     // value has been set
-    // it may has _then
+    // it may have _then
     READY,
     // then() has been posted as a request in loop
     POST,

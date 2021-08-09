@@ -64,6 +64,9 @@ int main() {
             std::cout << "poll finished" << std::endl;
             return true;
         })
+        .wait(std::chrono::milliseconds(2333), [](FakePoller &poller) {
+            // null
+        })
         .cancelIf([](FakePoller&) {
             std::cout << "but I try to cancel this routine. If true, looper will never stop" << std::endl;
             // return true; // never stop
@@ -104,6 +107,9 @@ int main() {
                 if(!poller.poll()) return false;
                 return true;
             })
+            // .wait(std::chrono::milliseconds(1000), [](FakePoller &poller) {
+            //     return poller;
+            // })
             .then([&finished, &stopFlag, &promises](FakePoller &&poller) {
                 finished++;
                 if(finished >= promises.size()) {
