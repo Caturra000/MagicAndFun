@@ -6,6 +6,9 @@
 template <typename T>
 class Future;
 
+// NOTE:
+// Promise is not copyable, but we need default const& operation
+// For the implementation, the moved capture lambda cannot be stored in std::function
 template <typename T>
 class Promise {
 public:

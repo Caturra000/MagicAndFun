@@ -21,6 +21,11 @@ public:
         : _looper(looper),
           _shared(shared) {}
 
+    Future(const Future &) = delete;
+    Future(Future &&) = default;
+    Future& operator=(const Future&) = delete;
+    Future& operator=(Future&&) = default;
+
     // TIMEOUT?
     bool hasResult() { return _shared->_state == State::READY; }
 
