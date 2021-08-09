@@ -57,7 +57,7 @@ int main() {
     stopFlag = false;
     add = false;
     auto fut22 = promise2.get()
-        .poll([&looper](FakePoller &&poller) {
+        .poll([&looper](FakePoller poller) {
             if(!poller.poll()) {
                 return false;
             }
@@ -100,7 +100,7 @@ int main() {
 
     for(auto &promise : promises) {
         auto fut = promise.get()
-            .poll([](FakePoller &&poller) {
+            .poll([](FakePoller &poller) {
                 if(!poller.poll()) return false;
                 return true;
             })

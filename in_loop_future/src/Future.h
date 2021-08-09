@@ -73,13 +73,13 @@ public:
         return future;
     }
 
-    // receive: bool(T&) bool(T&&)
+    // receive: bool(T) bool(T&)
     // return: Future<T>
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool DontReceiveTypeT = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T>>::value,
+              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
-              typename PollRequired = typename std::enable_if<AtLeastThenValid && DontReceiveTypeT && ShouldReturnBool>::type>
+              typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnBool>::type>
     Future<T> poll(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
@@ -102,14 +102,14 @@ public:
         return future;
     }
 
-    // receive: bool(T&) bool(T&&)
+    // receive: bool(T) bool(T&)
     // return: Future<T>
     // IMPROVEMENT: return future<T>& ?
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool DontReceiveTypeT = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T>>::value,
+              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T>>::value,
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
-              typename CancelIfRequired = typename std::enable_if<AtLeastThenValid && DontReceiveTypeT && ShouldReturnBool>::type>
+              typename CancelIfRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnBool>::type>
     Future<T> cancelIf(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
