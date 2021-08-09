@@ -106,6 +106,37 @@ public:
 
     // receive: bool(T) bool(T&)
     // return: Future<T>
+    template <typename Functor,
+              bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
+              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+              bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
+              typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnBool>::type>
+    Future<T> poll(size_t count, Functor &&f) {
+        using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
+        using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
+        Promise<T> promise(_looper);
+        auto future = promise.get();
+        State state = _shared->_state;
+        if(state == State::NEW || state == State::READY) {
+            setCallback([f = std::forward<Functor>(f), promise = std::move(promise), looper = _looper, count](T &&value) mutable {
+                if(f(static_cast<CastType>(value)) || count == 0) {
+                    promise.setValue(std::forward<ForwardType>(value));
+                } else {
+                    --count;
+                    looper->yield();
+                }
+            });
+            if(state == State::READY) {
+                postRequest();
+            }
+        } else if(_shared->_state == State::CANCEL) {
+            promise.cancel();
+        }
+        return future;
+    }
+
+    // receive: bool(T) bool(T&)
+    // return: Future<T>
     // IMPROVEMENT: return future<T>& ?
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
