@@ -16,9 +16,14 @@ public:
         : _looper(looper),
           _shared(std::make_shared<ControlBlock<T>>()) {}
 
-    void setValue(T value) {
+    // T_: a forward type of T, just reuse the code
+    // case:
+    // - T / T& : value copies to _state, if has _then, force cast (not actually moved, depends on then() argument)
+    // - T&& : value moves to _state, if has _then, force cast (not actually moved)
+    template <typename T_>
+    void setValue(T_ &&value) {
         if(_shared->_state == State::NEW) {
-            _shared->_value = std::move(value);
+            _shared->_value = std::forward<T_>(value);
             _shared->_state = State::READY;
         } else if(_shared->_state == State::CANCEL) {
             // ignore
@@ -30,6 +35,7 @@ public:
         if(_shared->_then) {
             _looper->addEvent([shared = _shared] {
                 // shared->_value may be moved
+                // _then must be T&&
                 shared->_then(static_cast<T&&>(shared->_value));
                 shared->_state = State::DONE;
             });

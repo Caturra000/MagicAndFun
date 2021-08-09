@@ -128,5 +128,7 @@ int main() {
     auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "cost: " << delta.count() << std::endl;
 
+    //using T1 = ThenArgumentTraitsConvert<>::Type;
+
     return 0;
 }
