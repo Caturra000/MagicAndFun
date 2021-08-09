@@ -4,21 +4,21 @@
 // IN PROGRESS: DIED state
 enum class State {
     // newcomer, mengxin
+    // it may has _then
     NEW,
-    // value has been set, and then()s have not been called
+    // value has been set
+    // it may has _then
     READY,
-    // set value and call then_
-    // but it is possible to add future.then() after promise.setValue()
-    // in this case, the routine will go on and the state keeps DONE
-    // note that value may be moved, please use T reference
+    // then() has been posted as a request in loop
+    POST,
+    // request is done
+    // value may be moved
     DONE,
     // called by future.get()
     // value is moved
-    // this state cannot be used
+    // this state cannot be reused
     // (sub)task will be break, but you should not .get() while using .then()
     DIED,
-    // TODO remove
-    TIMEOUT,
     // (sub)task will be break
     CANCEL,
 };
@@ -29,7 +29,7 @@ template <typename T>
 struct ControlBlock {
     State                    _state;
     T                        _value;
-    std::exception_ptr       _exception;
+    // std::exception_ptr       _exception;
     std::function<void(T&&)> _then;
 
     ControlBlock(): _state(State::NEW) {}

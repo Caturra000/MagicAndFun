@@ -29,18 +29,12 @@ public:
     // TIMEOUT?
     bool hasResult() { return _shared->_state == State::READY; }
 
+    // unsafe
     // ensure: has result
     T get() {
         auto value = std::move(_shared->_value);
-        _shared->_state = State::DONE;
+        _shared->_state = State::DIED;
         return value;
-    }
-
-    // unsafe, hook for yield
-    // ensure: has result
-    // will not change the state
-    T& getReference() {
-        return _shared->value;
     }
 
     // must receive functor R(T) R(T&) R(T&&)
@@ -52,24 +46,29 @@ public:
         // T or T& or T&& ?
         // using ForwardType = decltype(std::get<0>(std::declval<typename FunctionTraits<Functor>::ArgsTuple>()));
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
+        // TODO remove, std::forward is the same
         using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
         Promise<R> promise(_looper);
         auto future = promise.get();
-        if(_shared->_state == State::CANCEL) {
+        State state = _shared->_state;
+        if(state == State::NEW || state == State::READY) {
+            // async request, will be set value and then callback
+            setCallback([f = std::forward<Functor>(f), promise = std::move(promise)](T &&value) mutable {
+                // for callback f
+                // f(T) and f(T&) will copy current Future<T> value in shared,
+                // - T will copy to your routine. It is safe to move
+                // - T& just use reference where it is in shared state
+                // T&& will move the parent future value
+                // - T&& just use reference, but moving this value to your routine is unsafe
+                promise.setValue(f(static_cast<CastType>(value)));
+            });
+            if(state == State::READY) {
+                postRequest();
+            }
+        } else if(state == State::CANCEL) {
             // return a future will never be setValue()
             promise.cancel();
-            return future;
         }
-        // async request, will be set value and then callback
-        setCallback([f = std::forward<Functor>(f), promise = std::move(promise)](T &&value) mutable {
-            // for callback f
-            // f(T) and f(T&) will copy current Future<T> value in shared,
-            // - T will copy to your routine. It is safe to move
-            // - T& just use reference where it is in shared state
-            // T&& will move the parent future value
-            // - T&& just use reference, but moving this value to your routine is unsafe
-            promise.setValue(f(static_cast<CastType>(value)));
-        });
         return future;
     }
 
@@ -85,20 +84,23 @@ public:
         using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
         Promise<T> promise(_looper);
         auto future = promise.get();
-        if(_shared->_state == State::CANCEL) {
+        State state = _shared->_state;
+        if(state == State::NEW || state == State::READY) {
+            // reuse _then
+            setCallback([f = std::forward<Functor>(f), promise = std::move(promise), looper = _looper](T &&value) mutable {
+                if(f(static_cast<CastType>(value))) {
+                    promise.setValue(std::forward<ForwardType>(value));
+                } else {
+                    looper->yield();
+                }
+            });
+            if(state == State::READY) {
+                postRequest();
+            }
+        } else if(_shared->_state == State::CANCEL) {
             // return a future will never be setValue()
             promise.cancel();
-            return future;
         }
-        // reuse _then
-        setCallback([f = std::forward<Functor>(f), promise = std::move(promise), looper = _looper](T &&value) mutable {
-            if(f(static_cast<CastType>(value))) {
-                // actually move
-                promise.setValue(std::forward<ForwardType>(value));
-            } else {
-                looper->yield();
-            }
-        });
         return future;
     }
 
@@ -115,18 +117,22 @@ public:
         using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
         Promise<T> promise(_looper);
         auto future = promise.get();
-        if(_shared->_state == State::CANCEL) {
-            promise.cancel();
-            return future;
-        }
-        setCallback([f = std::forward<Functor>(f), promise = std::move(promise)](T &&value) mutable {
-            if(f(static_cast<CastType>(value))) {
-                promise.cancel();
-            } else {
-                // forward the current future to the next
-                promise.setValue(std::forward<ForwardType>(value));
+        State state = _shared->_state;
+        if(state == State::NEW || state == State::READY) {
+            setCallback([f = std::forward<Functor>(f), promise = std::move(promise)](T &&value) mutable {
+                if(f(static_cast<CastType>(value))) {
+                    promise.cancel();
+                } else {
+                    // forward the current future to the next
+                    promise.setValue(std::forward<ForwardType>(value));
+                }
+            });
+            if(state == State::READY) {
+                postRequest();
             }
-        });
+        } else if(_shared->_state == State::CANCEL) {
+            promise.cancel();
+        }
         return future;
     }
 
@@ -137,6 +143,18 @@ private:
 
     void setCallback(std::function<void(T&&)> &&f) {
         _shared->_then = std::move(f);
+    }
+
+    // unsafe
+    // ensure: READY & has then_
+    void postRequest() {
+        _shared->_state = State::POST;
+        _looper->addEvent([shared = _shared] {
+            // shared->_value may be moved
+            // _then must be T&&
+            shared->_then(static_cast<T&&>(shared->_value));
+            shared->_state = State::DONE;
+        });
     }
 
 private:

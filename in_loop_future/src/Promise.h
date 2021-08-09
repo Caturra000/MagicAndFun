@@ -25,20 +25,14 @@ public:
         if(_shared->_state == State::NEW) {
             _shared->_value = std::forward<T_>(value);
             _shared->_state = State::READY;
+            if(_shared->_then) {
+                postRequest();
+            }
         } else if(_shared->_state == State::CANCEL) {
             // ignore
             return;
         } else {
             throw std::runtime_error("promise can only set once.");
-        }
-
-        if(_shared->_then) {
-            _looper->addEvent([shared = _shared] {
-                // shared->_value may be moved
-                // _then must be T&&
-                shared->_then(static_cast<T&&>(shared->_value));
-                shared->_state = State::DONE;
-            });
         }
     }
 
@@ -55,6 +49,18 @@ public:
     Future<T> get() {
         return Future<T>(_looper, _shared);
     };
+
+private:
+    // ensure: NEW before setValue() or READY
+    void postRequest() {
+        _shared->_state = State::POST;
+        _looper->addEvent([shared = _shared] {
+            // shared->_value may be moved
+            // _then must be T&&
+            shared->_then(static_cast<T&&>(shared->_value));
+            shared->_state = State::DONE;
+        });
+    }
 
 private:
     SimpleLooper                     *_looper;
