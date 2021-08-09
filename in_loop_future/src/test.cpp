@@ -108,7 +108,7 @@ int main() {
                 return true;
             })
             // .wait(std::chrono::milliseconds(1000), [](FakePoller &poller) {
-            //     return poller;
+            //     // null
             // })
             .then([&finished, &stopFlag, &promises](FakePoller &&poller) {
                 finished++;
