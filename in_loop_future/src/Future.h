@@ -107,7 +107,7 @@ public:
     // IMPROVEMENT: return future<T>& ?
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T>>::value,
+              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
               typename CancelIfRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnBool>::type>
     Future<T> cancelIf(Functor &&f) {
