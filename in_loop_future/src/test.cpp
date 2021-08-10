@@ -157,7 +157,49 @@ int main() {
         looper.loop();
     }
 
-    std::cout << collectFut1.get().size() << std::endl;
+
+
+
+    // test whenN
+
+    auto stringFuture0 = makeFuture(&looper, std::string("12345"));
+    auto stringFuture1 = makeFuture(&looper, std::string("54321"));
+    auto stringFuture2 = makeFuture(&looper, std::string("13254"));
+
+    auto checkN = whenN(2, &looper, stringFuture0, stringFuture1, stringFuture2)
+        .then([&stopFlag](std::vector<std::pair<size_t, std::string>> &collected) {
+            std::cout << "whenN: " << collected.size() << std::endl;
+            for(auto &&pair : collected) {
+                std::cout << "[" << pair.first << ", " << pair.second << "]" << std::endl;
+            }
+            stopFlag = true;
+            return nullptr;
+        });
+
+    stopFlag = false;
+    for(; !stopFlag;) {
+        looper.loop();
+    }
+
+    // test whenAny
+
+    auto stringFuture3 = makeFuture(&looper, std::string("12345"));
+    auto stringFuture4 = makeFuture(&looper, std::string("54321"));
+    auto stringFuture5 = makeFuture(&looper, std::string("13254"));
+
+    whenAny(&looper, stringFuture3, stringFuture4, stringFuture5)
+        .then([&stopFlag](std::pair<size_t, std::string> &&any) {
+            std::cout << "any" << std::endl;
+            std::cout << "[" << any.first << ", " << any.second << "]" << std::endl;
+            stopFlag = true;
+            return nullptr;
+        });
+
+    stopFlag = false;
+    for(; !stopFlag;) {
+        looper.loop();
+    }
+    std::cout << stringFuture5.get() << std::endl;
 
     return 0;
 }
