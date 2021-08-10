@@ -49,24 +49,31 @@ private:
 
 template <size_t ...Is>
 struct TupleHelper<std::index_sequence<Is...>> {
-    template <typename Tuple>
-    static auto makeTupleFromValue(Tuple &&tup) {
+    template <typename ControlBlockTuple>
+    static auto makeResultTuple(ControlBlockTuple &&tup) {
         // decay to lvalue
         return std::make_tuple(std::get<Is>(tup)->_value...);
     }
 };
 
 // whenAll return copied values
+// futures must be lvalue
+// futs: Future<T1>, Future<T2>, Future<T3>...
+// return: Future<std::tuple<T1, T2, T3...>>
 template <typename ...Futs>
 inline auto whenAll(SimpleLooper *looper, Futs &...futs) {
-    auto cbTuple = std::make_tuple(futs.getControlBlock()...);
-    using CbTupleType = decltype(cbTuple);
-
-    auto boot = makeFuture(looper, std::move(cbTuple))
+    using ControlBlockTuple = std::tuple<std::shared_ptr<ControlBlock<typename FutureInner<Futs>::Type>>...>;
+    using ResultTuple = std::tuple<typename FutureInner<Futs>::Type...>;
+    using Binder = std::tuple<ControlBlockTuple, ResultTuple>;
+    auto boot = makeTupleFuture(looper,
+                                /*controlBlocks*/std::make_tuple(futs.getControlBlock()...),
+                                /*results*/ResultTuple{})
                 // at most X times?
-                .poll(/*X, */[](CbTupleType &cbTuple) {
+                .poll(/*X, */[](Binder &binder) {
                     bool pass = true;
-                    TupleHelper<decltype(cbTuple)>::forEach(cbTuple, [&pass](auto &&elem) mutable {
+                    auto &cbs = std::get<0>(binder);
+                    auto &res = std::get<1>(binder);
+                    TupleHelper<ControlBlockTuple>::forEach(cbs, [&pass](auto &&elem) mutable {
                         // IMPROVEMENT: O(n) algorithm
                         // or divide-and-conqure by yourself
                         // note: cannot cache pass result for the next poll, because state will die or cancel
@@ -74,10 +81,16 @@ inline auto whenAll(SimpleLooper *looper, Futs &...futs) {
                         bool hasValue = (state == State::READY) || (state == State::POST) || (state == State::DONE);
                         return pass &= hasValue;
                     });
+                    // lock values here if true
+                    if(pass) {
+                        using Sequence = typename std::make_index_sequence<std::tuple_size<ResultTuple>::value>;
+                        res = TupleHelper<Sequence>::makeResultTuple(cbs);
+                        // now it's safe to then()
+                    }
                     return pass;
-                }).then([](CbTupleType &&cbTuple) {
-                    using Is = typename std::make_index_sequence<std::tuple_size<std::decay_t<CbTupleType>>::value>;
-                    return TupleHelper<Is>::makeTupleFromValue(cbTuple);
+                }).then([](Binder &&binder) {
+                    auto res = std::move(std::get<1>(binder));
+                    return res;
                 });
     return boot;
 }
