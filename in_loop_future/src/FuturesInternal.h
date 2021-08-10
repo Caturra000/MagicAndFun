@@ -75,12 +75,16 @@ inline auto whenAllTemplate(SimpleLooper *looper, ControlBlockTupleForward &&con
         });
 }
 
-template <typename ResultVector, typename QueryVectorForward>
-inline auto whenNTemplate(size_t n, SimpleLooper *looper, QueryVectorForward &&queries) {
+
+template <typename T, typename ResultVector, typename QueryVectorForward, typename Functor,
+          bool AcceptConstReference = std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<const T&>>::value,
+          bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
+          typename WhenNRequired = typename std::enable_if<AcceptConstReference && ShouldReturnBool>::type>
+inline auto whenNTemplate(size_t n, SimpleLooper *looper, QueryVectorForward &&queries, Functor &&cond) {
     using QueryVector = typename std::remove_reference<QueryVectorForward>::type;
     using Binder = std::tuple<QueryVector, ResultVector>;
     return makeTupleFuture(looper, std::forward<QueryVectorForward>(queries), ResultVector{})
-        .poll([noresponse = QueryVector{}, remain = n](Binder &binder) mutable {
+        .poll([noresponse = QueryVector{}, remain = n, cond = std::forward<Functor>(cond)](Binder &binder) mutable {
             auto &queries = std::get<0>(binder);
             auto &results = std::get<1>(binder);
             while(remain && !queries.empty()) {
@@ -88,11 +92,11 @@ inline auto whenNTemplate(size_t n, SimpleLooper *looper, QueryVectorForward &&q
                 auto &query = queries.back();
                 State state = query.second->_state;
                 bool hasValue = (state == State::READY) || (state == State::POST) || (state == State::DONE);
-                if(!hasValue) {
-                    noresponse.emplace_back(std::move(query));
-                } else {
+                if(hasValue && cond(query.second->_value)) {
                     results.emplace_back(query.first, query.second->_value);
                     remain--;
+                } else {
+                    noresponse.emplace_back(std::move(query));
                 }
                 queries.pop_back();
             }

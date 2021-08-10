@@ -55,7 +55,7 @@ inline auto whenN(size_t n, SimpleLooper *looper, Fut &fut, Futs &...futs) {
         }
     };
 
-    return details::whenNTemplate<ResultVector>(n, looper, std::move(queries));
+    return details::whenNTemplate<T, ResultVector>(n, looper, std::move(queries), [](const T &) { return true; });
 }
 
 template <typename Iterator>
@@ -76,7 +76,28 @@ inline auto whenN(size_t n, SimpleLooper *looper, Iterator first, Iterator last)
         index++;
     }
 
-    return details::whenNTemplate<ResultVector>(n, looper, std::move(queries));
+    return details::whenNTemplate<T, ResultVector>(n, looper, std::move(queries), [](const T &) { return true; });
+}
+
+template <typename Iterator, typename Condition>
+inline auto whenNIf(size_t n, SimpleLooper *looper, Iterator first, Iterator last, Condition &&cond) {
+    // assert(N <= 1 + sizeof...(futs));
+    using Fut = typename Iterator::value_type;
+    using T = typename FutureInner<Fut>::Type;
+    using ControlBlockType = std::shared_ptr<ControlBlock<T>>;
+    using QueryPair = std::pair<size_t, ControlBlockType>;
+    using ResultPair = std::pair<size_t, T>;
+    using QueryVector = std::vector<QueryPair>;
+    using ResultVector = std::vector<ResultPair>;
+    QueryVector queries;
+
+    size_t index = 0;
+    for(auto cur = first; cur != last; cur = std::next(cur)) {
+        queries.emplace_back(index, cur->getControlBlock());
+        index++;
+    }
+
+    return details::whenNTemplate<T, ResultVector>(n, looper, std::move(queries), std::forward<Condition>(cond));
 }
 
 // futs : Future<T>, Future<T>, Future<T>...
@@ -97,6 +118,17 @@ inline auto whenAny(SimpleLooper *looper, Iterator first, Iterator last) {
     using Fut = typename Iterator::value_type;
     using T = typename FutureInner<Fut>::Type;
     return whenN(1, looper, first, last)
+        .then([](std::vector<std::pair<size_t, T>> &&results) {
+            auto result = std::move(results[0]);
+            return result;
+        });
+}
+
+template <typename Iterator, typename Condition>
+inline auto whenAnyIf(SimpleLooper *looper, Iterator first, Iterator last, Condition &&cond) {
+    using Fut = typename Iterator::value_type;
+    using T = typename FutureInner<Fut>::Type;
+    return whenNIf(1, looper, first, last, std::forward<Condition>(cond))
         .then([](std::vector<std::pair<size_t, T>> &&results) {
             auto result = std::move(results[0]);
             return result;

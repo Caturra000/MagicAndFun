@@ -171,8 +171,11 @@ int main() {
     futures.emplace_back(makeFuture(&looper, std::string("54321")));
     futures.emplace_back(makeFuture(&looper, std::string("13254")));
 
-    auto checkN = whenN(2, &looper, stringFuture0, stringFuture1, stringFuture2)
+    // auto checkN = whenN(2, &looper, stringFuture0, stringFuture1, stringFuture2)
     // auto checkN = whenN(2, &looper, futures.begin(), futures.end())
+    auto checkNIf = whenNIf(2, &looper, futures.begin(), futures.end(), [](const std::string &str) {
+            return str.size() > 0 && str[0] == '1';
+        })
         .then([&stopFlag](std::vector<std::pair<size_t, std::string>> &collected) {
             std::cout << "whenN: " << collected.size() << std::endl;
             for(auto &&pair : collected) {
@@ -202,7 +205,10 @@ int main() {
     // futures2.emplace_back(std::move(stringFuture5));
 
     // whenAny(&looper, stringFuture3, stringFuture4, stringFuture5)
-    whenAny(&looper, futures2.begin(), futures2.end())
+    // whenAny(&looper, futures2.begin(), futures2.end())
+    whenAnyIf(&looper, futures2.begin(), futures2.end(), [](const std::string &str) {
+            return str.size() > 1 && str[1] == '4';
+        })
         .then([&stopFlag](std::pair<size_t, std::string> &&any) {
             std::cout << "any" << std::endl;
             std::cout << "[" << any.first << ", " << any.second << "]" << std::endl;
