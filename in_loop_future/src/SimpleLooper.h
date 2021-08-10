@@ -1,13 +1,18 @@
 #pragma once
 #include <bits/stdc++.h>
 
-#define CPU_LOOP_UNROLL_4X(actionx1, actionx2, actionx4, width) do { \
+#define SKYWIND3000_CPU_LOOP_UNROLL_4X(actionx1, actionx2, actionx4, width) do { \
     unsigned long __width = (unsigned long)(width);    \
     unsigned long __increment = __width >> 2; \
     for (; __increment > 0; __increment--) { actionx4; }    \
     if (__width & 2) { actionx2; } \
     if (__width & 1) { actionx1; } \
 }   while (0)
+
+#define CATURRA_2X(action)  do { {action;} {action;} } while(0)
+#define CATURRA_4X(action)  do { CATURRA_2X(action); CATURRA_2X(action); } while(0)
+#define CATURRA_8X(action)  do { CATURRA_4X(action); CATURRA_4X(action); } while(0)
+#define CATURRA_16X(action) do { CATURRA_8X(action); CATURRA_8X(action); } while(0)
 
 class SimpleLooper {
 public:
@@ -23,21 +28,18 @@ public:
 
     void unroll4x() {
         size_t n = _mq.size();
-        CPU_LOOP_UNROLL_4X(
+        SKYWIND3000_CPU_LOOP_UNROLL_4X(
             {
                 loopOnce();
             },
             {
-                loopOnce();
-                loopOnce();
+                CATURRA_2X(loopOnce());
             },
             {
-                loopOnce();
-                loopOnce();
-                loopOnce();
-                loopOnce();
+                CATURRA_4X(loopOnce());
             },
-        n);
+            n
+        );
 
     }
 
@@ -77,4 +79,8 @@ private:
     int                               _global {}; // debug
 };
 
-#undef CPU_LOOP_UNROLL_4X
+#undef CATURRA_16X
+#undef CATURRA_8X
+#undef CATURRA_4X
+#undef CATURRA_2X
+#undef SKYWIND3000_CPU_LOOP_UNROLL_4X
