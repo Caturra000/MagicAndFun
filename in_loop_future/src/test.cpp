@@ -166,7 +166,13 @@ int main() {
     auto stringFuture1 = makeFuture(&looper, std::string("54321"));
     auto stringFuture2 = makeFuture(&looper, std::string("13254"));
 
+    std::vector<Future<std::string>> futures;
+    futures.emplace_back(makeFuture(&looper, std::string("12345")));
+    futures.emplace_back(makeFuture(&looper, std::string("54321")));
+    futures.emplace_back(makeFuture(&looper, std::string("13254")));
+
     auto checkN = whenN(2, &looper, stringFuture0, stringFuture1, stringFuture2)
+    // auto checkN = whenN(2, &looper, futures.begin(), futures.end())
         .then([&stopFlag](std::vector<std::pair<size_t, std::string>> &collected) {
             std::cout << "whenN: " << collected.size() << std::endl;
             for(auto &&pair : collected) {
@@ -187,7 +193,16 @@ int main() {
     auto stringFuture4 = makeFuture(&looper, std::string("54321"));
     auto stringFuture5 = makeFuture(&looper, std::string("13254"));
 
-    whenAny(&looper, stringFuture3, stringFuture4, stringFuture5)
+    std::vector<Future<std::string>> futures2;
+    futures2.emplace_back(makeFuture(&looper, std::string("12345")));
+    futures2.emplace_back(makeFuture(&looper, std::string("54321")));
+    futures2.emplace_back(makeFuture(&looper, std::string("13254")));
+    // futures2.emplace_back(std::move(stringFuture3));
+    // futures2.emplace_back(std::move(stringFuture4));
+    // futures2.emplace_back(std::move(stringFuture5));
+
+    // whenAny(&looper, stringFuture3, stringFuture4, stringFuture5)
+    whenAny(&looper, futures2.begin(), futures2.end())
         .then([&stopFlag](std::pair<size_t, std::string> &&any) {
             std::cout << "any" << std::endl;
             std::cout << "[" << any.first << ", " << any.second << "]" << std::endl;
@@ -199,7 +214,7 @@ int main() {
     for(; !stopFlag;) {
         looper.loop();
     }
-    std::cout << stringFuture5.get() << std::endl;
+    // std::cout << stringFuture5.get() << std::endl;
 
     return 0;
 }

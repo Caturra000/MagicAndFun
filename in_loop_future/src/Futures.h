@@ -2,6 +2,7 @@
 #include <bits/stdc++.h>
 #include "Future.h"
 #include "Promise.h"
+#include "FuturesInternal.h"
 
 // TODO namespace ...
 
@@ -19,43 +20,6 @@ inline Future<R> makeFuture(SimpleLooper *looper, T &&arg) {
     return promise.get();
 }
 
-template <typename Tuple>
-struct TupleHelper {
-public:
-    using DecayTuple = std::decay_t<Tuple>;
-
-    template <typename Functor>
-    static void forEach(DecayTuple &tup, Functor &&f) {
-        test<0>(tup, /*std::forward<Functor>*/(f));
-    }
-
-private:
-    template <size_t I, typename Functor>
-    static std::enable_if_t<(I+1 < std::tuple_size<DecayTuple>::value)>
-    test(DecayTuple &tup, Functor &&f) {
-        // true : continue
-        if(f(std::get<I>(tup))) {
-            test<I+1>(tup, std::forward<Functor>(f));
-        }
-    }
-
-    // last
-    template <size_t I, typename Functor>
-    static std::enable_if_t<(I+1 == std::tuple_size<DecayTuple>::value)>
-    test(DecayTuple &tup, Functor &&f) {
-        f(std::get<I>(tup));
-    }
-};
-
-template <size_t ...Is>
-struct TupleHelper<std::index_sequence<Is...>> {
-    template <typename ControlBlockTuple>
-    static auto makeResultTuple(ControlBlockTuple &&tup) {
-        // decay to lvalue
-        return std::make_tuple(std::get<Is>(tup)->_value...);
-    }
-};
-
 // whenAll return copied values
 // futures must be lvalue
 // futs: Future<T1>, Future<T2>, Future<T3>...
@@ -63,38 +27,8 @@ struct TupleHelper<std::index_sequence<Is...>> {
 template <typename ...Futs>
 inline auto whenAll(SimpleLooper *looper, Futs &...futs) {
     static_assert(sizeof...(futs) > 0, "whenAll should receive future");
-    using ControlBlockTuple = std::tuple<std::shared_ptr<ControlBlock<typename FutureInner<Futs>::Type>>...>;
     using ResultTuple = std::tuple<typename FutureInner<Futs>::Type...>;
-    using Binder = std::tuple<ControlBlockTuple, ResultTuple>;
-    auto boot = makeTupleFuture(looper,
-                                /*controlBlocks*/std::make_tuple(futs.getControlBlock()...),
-                                /*results*/ResultTuple{})
-                // at most X times?
-                .poll(/*X, */[](Binder &binder) {
-                    bool pass = true;
-                    auto &cbs = std::get<0>(binder);
-                    auto &res = std::get<1>(binder);
-                    TupleHelper<ControlBlockTuple>::forEach(cbs, [&pass](auto &&elem) mutable {
-                        // IMPROVEMENT: O(n) algorithm
-                        // or divide-and-conqure by yourself
-                        // note: cannot cache pass result for the next poll, because state will die or cancel
-                        auto state = elem->_state;
-                        bool hasValue = (state == State::READY) || (state == State::POST) || (state == State::DONE);
-                        return pass &= hasValue;
-                    });
-                    // lock values here if true
-                    if(pass) {
-                        using Sequence = typename std::make_index_sequence<std::tuple_size<ResultTuple>::value>;
-                        res = TupleHelper<Sequence>::makeResultTuple(cbs);
-                        // now it's safe to then()
-                    }
-                    return pass;
-                })
-                .then([](Binder &&binder) {
-                    auto res = std::move(std::get<1>(binder));
-                    return res;
-                });
-    return boot;
+    return details::whenAllTemplate<ResultTuple>(looper, std::make_tuple(futs.getControlBlock()...));
 }
 
 // futs : Future<T>, Future<T>, Future<T>...
@@ -109,7 +43,6 @@ inline auto whenN(size_t n, SimpleLooper *looper, Fut &fut, Futs &...futs) {
     using ResultPair = std::pair<size_t, T>; // index and result
     using QueryVector = std::vector<QueryPair>;
     using ResultVector = std::vector<ResultPair>;
-    using Binder = std::tuple<QueryVector, ResultVector>;
     QueryVector queries;
 
     // collect
@@ -122,35 +55,28 @@ inline auto whenN(size_t n, SimpleLooper *looper, Fut &fut, Futs &...futs) {
         }
     };
 
+    return details::whenNTemplate<ResultVector>(n, looper, std::move(queries));
+}
 
-    return makeTupleFuture(looper, std::move(queries), ResultVector{})
-        .poll([noresponse = QueryVector{}, remain = n](Binder &binder) mutable {
-            auto &queries = std::get<0>(binder);
-            auto &results = std::get<1>(binder);
-            while(remain && !queries.empty()) {
-                // pair: index + controllBlock
-                auto &query = queries.back();
-                State state = query.second->_state;
-                bool hasValue = (state == State::READY) || (state == State::POST) || (state == State::DONE);
-                if(!hasValue) {
-                    noresponse.emplace_back(std::move(query));
-                } else {
-                    results.emplace_back(query.first, query.second->_value);
-                    remain--;
-                }
-                queries.pop_back();
-            }
-            noresponse.swap(queries);
-            return remain == 0;
-        })
-        .then([](Binder &&binder) {
-            auto res = std::move(std::get<1>(binder));
-            // sort by index
-            std::sort(res.begin(), res.end(), [](auto &&lhs, auto &&rhs) {
-                return lhs.first < rhs.first;
-            });
-            return res;
-        });
+template <typename Iterator>
+inline auto whenN(size_t n, SimpleLooper *looper, Iterator first, Iterator last) {
+    // assert(N <= 1 + sizeof...(futs));
+    using Fut = typename Iterator::value_type;
+    using T = typename FutureInner<Fut>::Type;
+    using ControlBlockType = std::shared_ptr<ControlBlock<T>>;
+    using QueryPair = std::pair<size_t, ControlBlockType>;
+    using ResultPair = std::pair<size_t, T>;
+    using QueryVector = std::vector<QueryPair>;
+    using ResultVector = std::vector<ResultPair>;
+    QueryVector queries;
+
+    size_t index = 0;
+    for(auto cur = first; cur != last; cur = std::next(cur)) {
+        queries.emplace_back(index, cur->getControlBlock());
+        index++;
+    }
+
+    return details::whenNTemplate<ResultVector>(n, looper, std::move(queries));
 }
 
 // futs : Future<T>, Future<T>, Future<T>...
@@ -160,6 +86,17 @@ template <typename Fut, typename ...Futs>
 inline auto whenAny(SimpleLooper *looper, Fut &fut, Futs &...futs) {
     using T = typename FutureInner<Fut>::Type;
     return whenN(1, looper, fut, futs...)
+        .then([](std::vector<std::pair<size_t, T>> &&results) {
+            auto result = std::move(results[0]);
+            return result;
+        });
+}
+
+template <typename Iterator>
+inline auto whenAny(SimpleLooper *looper, Iterator first, Iterator last) {
+    using Fut = typename Iterator::value_type;
+    using T = typename FutureInner<Fut>::Type;
+    return whenN(1, looper, first, last)
         .then([](std::vector<std::pair<size_t, T>> &&results) {
             auto result = std::move(results[0]);
             return result;
