@@ -81,9 +81,9 @@ public:
     // return: Future<T>
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
-              typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnBool>::type>
+              typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
     Future<T> poll(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
@@ -113,9 +113,9 @@ public:
     // return: Future<T>
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
-              typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnBool>::type>
+              typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
     Future<T> poll(size_t count, Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
@@ -144,9 +144,9 @@ public:
     // IMPROVEMENT: return future<T>& ?
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
-              typename CancelIfRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnBool>::type>
+              typename CancelIfRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
     Future<T> cancelIf(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
@@ -171,13 +171,13 @@ public:
         return future;
     }
 
-    // receive: bool(T) bool(T&)
+    // receive: void(T) void(T&)
     // return: Future<T>
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
               bool ShouldReturnVoid = std::is_same<typename FunctionTraits<Functor>::ReturnType, void>::value,
-              typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnVoid>::type>
+              typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnVoid>::type>
     Future<T> wait(std::chrono::milliseconds duration, Functor &&f) {
         auto start = std::chrono::system_clock::time_point{};
         return poll([f = std::forward<Functor>(f), start, duration](T &self) mutable {
@@ -194,13 +194,13 @@ public:
         });
     }
 
-    // receive: bool(T) bool(T&)
+    // receive: void(T) void(T&)
     // return: Future<T>
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAccpetRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
               bool ShouldReturnVoid = std::is_same<typename FunctionTraits<Functor>::ReturnType, void>::value,
-              typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAccpetRvalue && ShouldReturnVoid>::type>
+              typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnVoid>::type>
     Future<T> wait(std::chrono::system_clock::time_point timePoint, Functor &&f) {
         return poll([f = std::forward<Functor>(f), timePoint](T &self) mutable {
             auto current = std::chrono::system_clock::now();
