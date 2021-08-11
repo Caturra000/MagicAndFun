@@ -209,19 +209,7 @@ public:
               bool ShouldReturnVoid = std::is_same<typename FunctionTraits<Functor>::ReturnType, void>::value,
               typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnVoid>::type>
     Future<T> wait(std::chrono::milliseconds duration, Functor &&f) {
-        auto start = std::chrono::system_clock::time_point{};
-        return poll([f = std::forward<Functor>(f), start, duration](T &self) mutable {
-            auto current = std::chrono::system_clock::now();
-            // call once
-            if(start == std::chrono::system_clock::time_point{}) {
-                start = current;
-            }
-            if(current - start >= duration) {
-                f(self);
-                return true;
-            }
-            return false;
-        });
+        return wait(1, duration, std::forward<Functor>(f));
     }
 
     // receive: void(T) void(T&)
