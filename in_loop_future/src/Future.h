@@ -178,6 +178,36 @@ public:
               bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
               bool ShouldReturnVoid = std::is_same<typename FunctionTraits<Functor>::ReturnType, void>::value,
               typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnVoid>::type>
+    Future<T> wait(size_t count, std::chrono::milliseconds duration, Functor &&f) {
+        auto start = std::chrono::system_clock::time_point{};
+        return poll([f = std::forward<Functor>(f), start, duration, remain = count](T &self) mutable {
+            auto current = std::chrono::system_clock::now();
+            // call once
+            if(start == std::chrono::system_clock::time_point{}) {
+                // unlikely
+                if(remain == 0) {
+                    return true;
+                }
+                start = current;
+            }
+            if(current - start >= duration) {
+                f(self);
+                if(--remain == 0) {
+                    return true;
+                }
+                start = /*current*/ std::chrono::system_clock::now();
+            }
+            return false;
+        });
+    }
+
+    // receive: void(T) void(T&)
+    // return: Future<T>
+    template <typename Functor,
+              bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
+              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+              bool ShouldReturnVoid = std::is_same<typename FunctionTraits<Functor>::ReturnType, void>::value,
+              typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnVoid>::type>
     Future<T> wait(std::chrono::milliseconds duration, Functor &&f) {
         auto start = std::chrono::system_clock::time_point{};
         return poll([f = std::forward<Functor>(f), start, duration](T &self) mutable {

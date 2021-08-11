@@ -64,8 +64,11 @@ int main() {
             std::cout << "poll finished" << std::endl;
             return true;
         })
-        .wait(std::chrono::milliseconds(2333), [](FakePoller &poller) {
-            // null
+        // .wait(std::chrono::milliseconds(2333), [](FakePoller &poller) {
+        //     // null
+        // })
+        .wait(3, std::chrono::milliseconds(2333), [n = 0](FakePoller &poller) mutable {
+            std::cout << "test " << ++n << std::endl;
         })
         .cancelIf([](FakePoller&) {
             std::cout << "but I try to cancel this routine. If true, looper will never stop" << std::endl;
