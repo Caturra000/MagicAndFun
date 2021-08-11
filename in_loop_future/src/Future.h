@@ -51,8 +51,6 @@ public:
         // T or T& or T&& ?
         // using ForwardType = decltype(std::get<0>(std::declval<typename FunctionTraits<Functor>::ArgsTuple>()));
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
-        // TODO remove, std::forward is the same
-        using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
         Promise<R> promise(_looper);
         auto future = promise.get();
         State state = _shared->_state;
@@ -65,7 +63,7 @@ public:
                 // - T& just use reference where it is in shared state
                 // T&& will move the parent future value
                 // - T&& just use reference, but moving this value to your routine is unsafe
-                promise.setValue(f(static_cast<CastType>(value)));
+                promise.setValue(f(std::forward<ForwardType>(value)));
             });
             if(state == State::READY) {
                 postRequest();
@@ -86,14 +84,13 @@ public:
               typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
     Future<T> poll(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
-        using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
         Promise<T> promise(_looper);
         auto future = promise.get();
         State state = _shared->_state;
         if(state == State::NEW || state == State::READY) {
             // reuse _then
             setCallback([f = std::forward<Functor>(f), promise = std::move(promise), looper = _looper](T &&value) mutable {
-                if(f(static_cast<CastType>(value))) {
+                if(f(std::forward<ForwardType>(value))) {
                     promise.setValue(std::forward<ForwardType>(value));
                 } else {
                     looper->yield();
@@ -118,13 +115,12 @@ public:
               typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
     Future<T> poll(size_t count, Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
-        using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
         Promise<T> promise(_looper);
         auto future = promise.get();
         State state = _shared->_state;
         if(state == State::NEW || state == State::READY) {
             setCallback([f = std::forward<Functor>(f), promise = std::move(promise), looper = _looper, count](T &&value) mutable {
-                if(count-- == 0 || f(static_cast<CastType>(value))) {
+                if(count-- == 0 || f(std::forward<ForwardType>(value))) {
                     promise.setValue(std::forward<ForwardType>(value));
                 } else {
                     looper->yield();
@@ -149,13 +145,12 @@ public:
               typename CancelIfRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
     Future<T> cancelIf(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
-        using CastType = typename ThenArgumentTraitsConvert<ForwardType>::Type;
         Promise<T> promise(_looper);
         auto future = promise.get();
         State state = _shared->_state;
         if(state == State::NEW || state == State::READY) {
             setCallback([f = std::forward<Functor>(f), promise = std::move(promise)](T &&value) mutable {
-                if(f(static_cast<CastType>(value))) {
+                if(f(std::forward<ForwardType>(value))) {
                     promise.cancel();
                 } else {
                     // forward the current future to the next
