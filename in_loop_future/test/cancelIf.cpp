@@ -20,13 +20,13 @@ int main() {
                 bool isWinner = !(lucky--);
                 return std::make_pair(std::move(player), isWinner);
             })
-            .cancelIf([&stop, &remain](std::pair<std::string, bool> &info) mutable {
+            .cancelIf([&stop, &remain](std::pair<std::string, bool> &info) {
                 bool isWinner = info.second;
                 std::cout << info.first << ( isWinner ? " is alive" : " is dead") << std::endl;
                 if(!isWinner && --remain == 0) stop = true;
                 return !isWinner;
             })
-            .then([&stop, &remain](std::pair<std::string, bool> &&info) mutable {
+            .then([&stop, &remain](std::pair<std::string, bool> &&info) {
                 // assert(info.second);
                 std::cout << info.first << " LEVEL UP!" << std::endl;
                 if(--remain == 0) stop = true;
