@@ -21,11 +21,14 @@ enum class EofTag {};
 
 template <char ...chs>
 struct MetaString {
+    template <char ...rchs>
+    using Append = MetaString<chs..., rchs...>;
+
     constexpr const static char str[]  = { chs... };
     constexpr const static size_t capacity = sizeof...(chs);
-    constexpr const char* operator()() const { return MetaString<chs...>::str; }
-    constexpr const char* operator()(EofTag) const { return {chs..., '\0'}; }
-    constexpr const size_t length() const { return MetaString<chs...>::capacity; }
+    constexpr const char* operator()() const { return str; }
+    constexpr const char* operator()(EofTag) const { return Append<'\0'>::str; }
+    constexpr const size_t length() const { return capacity; }
     constexpr const size_t length(EofTag) const { return length() + 1; }
 };
 template <char ...chs>
