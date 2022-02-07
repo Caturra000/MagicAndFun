@@ -47,6 +47,7 @@ inline constexpr View resolveTypeNameFrom(const View fullInfo) {
     const char *base = fullInfo.base;
     size_t lo = findLastPosFrom(fullInfo, '=') + 2;
     size_t hi = findLastPosFrom(fullInfo, ']');
+    // 注意这个view并没有'\0'
     return View { base + lo, hi - lo };
 }
 
@@ -68,7 +69,7 @@ inline constexpr const auto getTypeName() {
     // 目前还没想好C++14及以下的兼容解决方案orz
     // 如果实在没更好的办法，那就全面升级C++17，顺便把View改为std::string_view
     return [&typeNameView]<size_t ...Is>(std::index_sequence<Is...>) {
-        return MetaString<typeNameView.base[Is]...>{};
+        return MetaString<typeNameView.base[Is]..., '\0'>{};
     } (sequence);
 }
 
