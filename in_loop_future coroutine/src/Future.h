@@ -2,13 +2,9 @@
 #include <bits/stdc++.h>
 #include "FunctionTraits.h"
 #include "FutureTraits.h"
-#include "SimpleLooper.h"
+#include "Looper.h"
 #include "ControlBlock.h"
 #include "Promise.h"
-
-// [experimental]
-// In loop future
-// lockfree?
 
 template <typename T>
 class Promise;
@@ -16,8 +12,8 @@ class Promise;
 template <typename T>
 class Future {
 public:
-    Future(SimpleLooper *looper,
-           const std::shared_ptr<ControlBlock<T>> &shared)
+    Future(Looper *looper,
+           const SharedPtr<ControlBlock<T>> &shared)
         : _looper(looper),
           _shared(shared) {}
 
@@ -33,12 +29,12 @@ public:
     // ensure: has result
     T get() {
         auto value = std::move(_shared->_value);
-        _shared->_state = State::DIED;
+        _shared->_state = State::DEAD;
         return value;
     }
 
     // unsafe
-    std::shared_ptr<ControlBlock<T>> getControlBlock() {
+    SharedPtr<ControlBlock<T>> getControlBlock() {
         return _shared;
     }
 
@@ -75,13 +71,14 @@ public:
         return future;
     }
 
-    // receive: bool(T) bool(T&)
+    // receive: bool(T) bool(T&) bool(T&&)
+    // note: bool(T&&) may be unsafe (will move last future result)
     // return: Future<T>
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+            /*bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,*/
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
-              typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
+              typename PollRequired = typename std::enable_if<AtLeastThenValid /*&& WontAcceptRvalue*/ && ShouldReturnBool>::type>
     Future<T> poll(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         Promise<T> promise(_looper);
@@ -106,13 +103,14 @@ public:
         return future;
     }
 
-    // receive: bool(T) bool(T&)
+    // receive: bool(T) bool(T&) bool(T&&)
+    // note: bool(T&&) may be unsafe (will move last future result)
     // return: Future<T>
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+            /*bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,*/
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
-              typename PollRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
+              typename PollRequired = typename std::enable_if<AtLeastThenValid /*&& WontAcceptRvalue*/ && ShouldReturnBool>::type>
     Future<T> poll(size_t count, Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         Promise<T> promise(_looper);
@@ -135,14 +133,15 @@ public:
         return future;
     }
 
-    // receive: bool(T) bool(T&)
+    // receive: bool(T) bool(T&) bool(T&&)
     // return: Future<T>
+    // note: bool(T&&) may be unsafe (will move last future result)
     // IMPROVEMENT: return future<T>& ?
     template <typename Functor,
               bool AtLeastThenValid = IsThenValid<Future<T>, Functor>::value,
-              bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,
+            /*bool WontAcceptRvalue = !std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<T&&>>::value,*/
               bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
-              typename CancelIfRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnBool>::type>
+              typename CancelIfRequired = typename std::enable_if<AtLeastThenValid /*&& WontAcceptRvalue*/ && ShouldReturnBool>::type>
     Future<T> cancelIf(Functor &&f) {
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         Promise<T> promise(_looper);
@@ -237,8 +236,8 @@ private:
     // unsafe
     // ensure: READY & has then_
     void postRequest() {
-        _shared->_state = State::POST;
-        _looper->addEvent([shared = _shared] {
+        _shared->_state = State::POSTED;
+        _looper->post([shared = _shared] {
             // shared->_value may be moved
             // _then must be T&&
             shared->_then(static_cast<T&&>(shared->_value));
@@ -247,6 +246,7 @@ private:
     }
 
 private:
-    SimpleLooper                     *_looper;
-    std::shared_ptr<ControlBlock<T>> _shared;
+    Looper                           *_looper;
+    SharedPtr<ControlBlock<T>> _shared;
 };
+

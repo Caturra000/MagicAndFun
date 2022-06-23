@@ -42,7 +42,7 @@ struct TupleHelper<std::index_sequence<Is...>> {
 };
 
 template <typename ResultTuple, typename ControlBlockTupleForward>
-inline auto whenAllTemplate(SimpleLooper *looper, ControlBlockTupleForward &&controlBlocks) {
+inline auto whenAllTemplate(Looper *looper, ControlBlockTupleForward &&controlBlocks) {
     using ControlBlockTuple = typename std::remove_reference<ControlBlockTupleForward>::type;
     using Binder = std::tuple<ControlBlockTuple, ResultTuple>;
     return makeTupleFuture(looper,
@@ -58,7 +58,7 @@ inline auto whenAllTemplate(SimpleLooper *looper, ControlBlockTupleForward &&con
                 // or divide-and-conqure by yourself
                 // note: cannot cache pass result for the next poll, because state will die or cancel
                 auto state = elem->_state;
-                bool hasValue = (state == State::READY) || (state == State::POST) || (state == State::DONE);
+                bool hasValue = (state == State::READY) || (state == State::POSTED) || (state == State::DONE);
                 return pass &= hasValue;
             });
             // lock values here if true
@@ -80,7 +80,7 @@ template <typename T, typename ResultVector, typename QueryVectorForward, typena
           bool AcceptConstReference = std::is_same<typename FunctionTraits<Functor>::ArgsTuple, std::tuple<const T&>>::value,
           bool ShouldReturnBool = std::is_same<typename FunctionTraits<Functor>::ReturnType, bool>::value,
           typename WhenNRequired = typename std::enable_if<AcceptConstReference && ShouldReturnBool>::type>
-inline auto whenNTemplate(size_t n, SimpleLooper *looper, QueryVectorForward &&queries, Functor &&cond) {
+inline auto whenNTemplate(size_t n, Looper *looper, QueryVectorForward &&queries, Functor &&cond) {
     using QueryVector = typename std::remove_reference<QueryVectorForward>::type;
     using Binder = std::tuple<QueryVector, ResultVector>;
     return makeTupleFuture(looper, std::forward<QueryVectorForward>(queries), ResultVector{})
@@ -91,7 +91,7 @@ inline auto whenNTemplate(size_t n, SimpleLooper *looper, QueryVectorForward &&q
                 // pair: index + controllBlock
                 auto &query = queries.back();
                 State state = query.second->_state;
-                bool hasValue = (state == State::READY) || (state == State::POST) || (state == State::DONE);
+                bool hasValue = (state == State::READY) || (state == State::POSTED) || (state == State::DONE);
                 if(hasValue && cond(query.second->_value)) {
                     results.emplace_back(query.first, query.second->_value);
                     remain--;

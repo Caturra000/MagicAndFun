@@ -1,7 +1,13 @@
 #pragma once
 #include <bits/stdc++.h>
 
-// IN PROGRESS: DIED state
+template <typename T>
+#ifdef __GNUC__
+using SharedPtr = std::__shared_ptr<T, __gnu_cxx::_S_single>;
+#else
+using SharedPtr = std::shared_ptr<T>;
+#endif
+
 enum class State {
     // newcomer, mengxin
     // it may have _then
@@ -10,7 +16,7 @@ enum class State {
     // it may have _then
     READY,
     // then() has been posted as a request in loop
-    POST,
+    POSTED,
     // request is done
     // value may be moved
     DONE,
@@ -18,7 +24,7 @@ enum class State {
     // value is moved
     // this state cannot be reused
     // (sub)task will be break, but you should not .get() while using .then()
-    DIED,
+    DEAD,
     // (sub)task will be break
     CANCEL,
 };
@@ -34,3 +40,4 @@ struct ControlBlock {
 
     ControlBlock(): _state(State::NEW) {}
 };
+

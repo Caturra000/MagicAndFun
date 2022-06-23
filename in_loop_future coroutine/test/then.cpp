@@ -2,7 +2,7 @@
 #include "../src/Futures.h"
 
 int main() {
-    SimpleLooper looper;
+    Looper looper;
     bool stop = false;
 
     using Username = std::string;

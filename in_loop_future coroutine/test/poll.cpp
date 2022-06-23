@@ -5,7 +5,7 @@
 
 // listen keyboard and echo
 int main() try {
-    SimpleLooper looper;
+    Looper looper;
     bool stop = false;
 
     int lines = 3;

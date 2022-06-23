@@ -4,17 +4,15 @@
 #include "Promise.h"
 #include "FuturesInternal.h"
 
-// TODO namespace ...
-
 template <typename ...Args, typename Tuple = std::tuple<std::decay_t<Args>...>>
-inline Future<Tuple> makeTupleFuture(SimpleLooper *looper, Args &&...args) {
+inline Future<Tuple> makeTupleFuture(Looper *looper, Args &&...args) {
     Promise<Tuple> promise(looper);
     promise.setValue(std::make_tuple(std::forward<Args>(args)...));
     return promise.get();
 }
 
 template <typename T, typename R = std::decay_t<T>>
-inline Future<R> makeFuture(SimpleLooper *looper, T &&arg) {
+inline Future<R> makeFuture(Looper *looper, T &&arg) {
     Promise<R> promise(looper);
     promise.setValue(std::forward<T>(arg));
     return promise.get();
@@ -25,7 +23,7 @@ inline Future<R> makeFuture(SimpleLooper *looper, T &&arg) {
 // futs: Future<T1>, Future<T2>, Future<T3>...
 // return: Future<std::tuple<T1, T2, T3...>>
 template <typename ...Futs>
-inline auto whenAll(SimpleLooper *looper, Futs &...futs) {
+inline auto whenAll(Looper *looper, Futs &...futs) {
     static_assert(sizeof...(futs) > 0, "whenAll should receive future");
     using ResultTuple = std::tuple<typename FutureInner<Futs>::Type...>;
     return details::whenAllTemplate<ResultTuple>(looper, std::make_tuple(futs.getControlBlock()...));
@@ -35,10 +33,10 @@ inline auto whenAll(SimpleLooper *looper, Futs &...futs) {
 // return: Future<std::vector<std::pair<size_t, T>>>
 // returns index and result
 template <typename Fut, typename ...Futs>
-inline auto whenN(size_t n, SimpleLooper *looper, Fut &fut, Futs &...futs) {
+inline auto whenN(size_t n, Looper *looper, Fut &fut, Futs &...futs) {
     // assert(N <= 1 + sizeof...(futs));
     using T = typename FutureInner<Fut>::Type;
-    using ControlBlockType = std::shared_ptr<ControlBlock<T>>;
+    using ControlBlockType = SharedPtr<ControlBlock<T>>;
     using QueryPair = std::pair<size_t, ControlBlockType>;
     using ResultPair = std::pair<size_t, T>; // index and result
     using QueryVector = std::vector<QueryPair>;
@@ -59,11 +57,11 @@ inline auto whenN(size_t n, SimpleLooper *looper, Fut &fut, Futs &...futs) {
 }
 
 template <typename Iterator>
-inline auto whenN(size_t n, SimpleLooper *looper, Iterator first, Iterator last) {
+inline auto whenN(size_t n, Looper *looper, Iterator first, Iterator last) {
     // assert(N <= 1 + sizeof...(futs));
     using Fut = typename Iterator::value_type;
     using T = typename FutureInner<Fut>::Type;
-    using ControlBlockType = std::shared_ptr<ControlBlock<T>>;
+    using ControlBlockType = SharedPtr<ControlBlock<T>>;
     using QueryPair = std::pair<size_t, ControlBlockType>;
     using ResultPair = std::pair<size_t, T>;
     using QueryVector = std::vector<QueryPair>;
@@ -80,11 +78,11 @@ inline auto whenN(size_t n, SimpleLooper *looper, Iterator first, Iterator last)
 }
 
 template <typename Iterator, typename Condition>
-inline auto whenNIf(size_t n, SimpleLooper *looper, Iterator first, Iterator last, Condition &&cond) {
+inline auto whenNIf(size_t n, Looper *looper, Iterator first, Iterator last, Condition &&cond) {
     // assert(N <= 1 + sizeof...(futs));
     using Fut = typename Iterator::value_type;
     using T = typename FutureInner<Fut>::Type;
-    using ControlBlockType = std::shared_ptr<ControlBlock<T>>;
+    using ControlBlockType = SharedPtr<ControlBlock<T>>;
     using QueryPair = std::pair<size_t, ControlBlockType>;
     using ResultPair = std::pair<size_t, T>;
     using QueryVector = std::vector<QueryPair>;
@@ -104,7 +102,7 @@ inline auto whenNIf(size_t n, SimpleLooper *looper, Iterator first, Iterator las
 // return: Future<std::pair<size_t, T>>
 // returns index and result
 template <typename Fut, typename ...Futs>
-inline auto whenAny(SimpleLooper *looper, Fut &fut, Futs &...futs) {
+inline auto whenAny(Looper *looper, Fut &fut, Futs &...futs) {
     using T = typename FutureInner<Fut>::Type;
     return whenN(1, looper, fut, futs...)
         .then([](std::vector<std::pair<size_t, T>> &&results) {
@@ -114,7 +112,7 @@ inline auto whenAny(SimpleLooper *looper, Fut &fut, Futs &...futs) {
 }
 
 template <typename Iterator>
-inline auto whenAny(SimpleLooper *looper, Iterator first, Iterator last) {
+inline auto whenAny(Looper *looper, Iterator first, Iterator last) {
     using Fut = typename Iterator::value_type;
     using T = typename FutureInner<Fut>::Type;
     return whenN(1, looper, first, last)
@@ -125,7 +123,7 @@ inline auto whenAny(SimpleLooper *looper, Iterator first, Iterator last) {
 }
 
 template <typename Iterator, typename Condition>
-inline auto whenAnyIf(SimpleLooper *looper, Iterator first, Iterator last, Condition &&cond) {
+inline auto whenAnyIf(Looper *looper, Iterator first, Iterator last, Condition &&cond) {
     using Fut = typename Iterator::value_type;
     using T = typename FutureInner<Fut>::Type;
     return whenNIf(1, looper, first, last, std::forward<Condition>(cond))

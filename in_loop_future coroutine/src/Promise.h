@@ -1,6 +1,6 @@
 #pragma once
 #include <bits/stdc++.h>
-#include "SimpleLooper.h"
+#include "Looper.h"
 #include "ControlBlock.h"
 
 template <typename T>
@@ -12,9 +12,13 @@ class Future;
 template <typename T>
 class Promise {
 public:
-    Promise(SimpleLooper *looper)
+    explicit Promise(Looper *looper)
         : _looper(looper),
+#ifdef __GNUC__
+          _shared(std::__make_shared<ControlBlock<T>, std::_S_single>()) {}
+#else
           _shared(std::make_shared<ControlBlock<T>>()) {}
+#endif
 
     // T_: a forward type of T, just reuse the code
     // case:
@@ -53,8 +57,8 @@ public:
 private:
     // ensure: NEW before setValue() or READY
     void postRequest() {
-        _shared->_state = State::POST;
-        _looper->addEvent([shared = _shared] {
+        _shared->_state = State::POSTED;
+        _looper->post([shared = _shared] {
             // shared->_value may be moved
             // _then must be T&&
             shared->_then(static_cast<T&&>(shared->_value));
@@ -63,6 +67,6 @@ private:
     }
 
 private:
-    SimpleLooper                     *_looper;
-    std::shared_ptr<ControlBlock<T>> _shared;
+    Looper                           *_looper;
+    SharedPtr<ControlBlock<T>> _shared;
 };

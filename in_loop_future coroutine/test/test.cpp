@@ -19,7 +19,7 @@ struct FakePoller {
 };
 
 int main() {
-    SimpleLooper looper;
+    Looper looper;
     Promise<int> promise(&looper);
     bool stopFlag = false;
     bool add = false;

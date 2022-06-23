@@ -1,5 +1,4 @@
 #pragma once
-#include <bits/stdc++.h>
 
 #define SKYWIND3000_CPU_LOOP_UNROLL_4X(actionx1, actionx2, actionx4, width) do { \
     unsigned long __width = (unsigned long)(width);    \
@@ -14,29 +13,27 @@
 #define CATURRA_8X(action)  do { CATURRA_4X(action); CATURRA_4X(action); } while(0)
 #define CATURRA_16X(action) do { CATURRA_8X(action); CATURRA_8X(action); } while(0)
 
-class SimpleLooper {
-public:
-    // example: for(;;) loop();
-    void loop(nullptr_t) {
-        for(int sz = _mq.size(); sz--;) {
-            loopOnce();
-        }
-    }
+#include <bits/stdc++.h>
 
-    // just for fun
+
+class Looper {
+public:
+
     void loop() { unroll4x(); }
+
+    void stop() {}
 
     void unroll4x() {
         size_t n = _mq.size();
         SKYWIND3000_CPU_LOOP_UNROLL_4X(
             {
-                loopOnce();
+                loopOnceUnchecked();
             },
             {
-                CATURRA_2X(loopOnce());
+                CATURRA_2X(loopOnceUnchecked());
             },
             {
-                CATURRA_4X(loopOnce());
+                CATURRA_4X(loopOnceUnchecked());
             },
             n
         );
@@ -44,14 +41,14 @@ public:
     }
 
     // unsafe
-    void loopOnce() {
+    void loopOnceUnchecked() {
         // debug();
         _lastEvent = std::move(_mq.front());
         _mq.pop();
         _lastEvent();
     }
 
-    void loopOnceChecked() { if(!_mq.empty()) loopOnce(); }
+    void loopOnce() { if(!_mq.empty()) loopOnceUnchecked(); }
 
     // TODO
     // receive and return a context object
@@ -62,7 +59,7 @@ public:
         _mq.emplace(std::move(_lastEvent));
     }
 
-    void addEvent(std::function<void()> event) {
+    void post(std::function<void()> event) {
         if(event) {
             _mq.emplace(std::move(event));
         }

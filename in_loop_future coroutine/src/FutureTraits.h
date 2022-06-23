@@ -75,4 +75,3 @@ template <typename T>
 struct ThenArgumentTraitsConvert<T&&> {
     using Type = T&&;
 };
-
