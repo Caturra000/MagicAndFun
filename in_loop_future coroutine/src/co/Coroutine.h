@@ -87,8 +87,7 @@ private:
     Environment();
 
 private:
-    std::array<std::shared_ptr<Coroutine>, 1024> _cStack;
-    size_t _cStackTop;
+    std::vector<std::shared_ptr<Coroutine>> _cStack;
     std::shared_ptr<Coroutine> _main;
 };
 
@@ -105,18 +104,18 @@ inline Environment& Environment::instance() {
 }
 
 inline Coroutine* Environment::current() {
-    return _cStack[_cStackTop - 1].get();
+    return _cStack.back().get();
 }
 
 inline void Environment::push(std::shared_ptr<Coroutine> coroutine) {
-    _cStack[_cStackTop++] = std::move(coroutine);
+    _cStack.emplace_back(std::move(coroutine));
 }
 
 inline void Environment::pop() {
-    _cStackTop--;
+    _cStack.pop_back();
 }
 
-inline Environment::Environment(): _cStackTop(0) {
+inline Environment::Environment() {
     _main = std::make_shared<Coroutine>(this, [](){});
     // TODO set State
     push(_main);

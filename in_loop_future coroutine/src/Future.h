@@ -87,11 +87,10 @@ public:
         if(state == State::NEW || state == State::READY) {
             // reuse _then
             setCallback([f = std::forward<Functor>(f), promise = std::move(promise), looper = _looper](T &&value) mutable {
-                if(f(std::forward<ForwardType>(value))) {
-                    promise.setValue(std::forward<ForwardType>(value));
-                } else {
+                while(!f(std::forward<ForwardType>(value))) {
                     looper->yield();
                 }
+                promise.setValue(std::forward<ForwardType>(value));
             });
             if(state == State::READY) {
                 postRequest();
@@ -118,11 +117,10 @@ public:
         State state = _shared->_state;
         if(state == State::NEW || state == State::READY) {
             setCallback([f = std::forward<Functor>(f), promise = std::move(promise), looper = _looper, count](T &&value) mutable {
-                if(count-- == 0 || f(std::forward<ForwardType>(value))) {
-                    promise.setValue(std::forward<ForwardType>(value));
-                } else {
+                while(count-- && !f(std::forward<ForwardType>(value))) {
                     looper->yield();
                 }
+                promise.setValue(std::forward<ForwardType>(value));
             });
             if(state == State::READY) {
                 postRequest();
