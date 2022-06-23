@@ -17,6 +17,13 @@
 #include "co.hpp"
 
 class Looper {
+
+    template <typename>
+    friend class Future;
+
+    template <typename>
+    friend class Promise;
+
 public:
 
     void loop() { unroll4x(); }
@@ -43,12 +50,9 @@ public:
     // unsafe
     void loopOnceUnchecked() {
         // debug();
-        auto co = std::move(_mq.front());
+        auto callback = std::move(_mq.front());
         _mq.pop();
-        co->resume();
-        if(co->running()) {
-            _mq.emplace(std::move(co));
-        }
+        callback();
     }
 
     void loopOnce() { if(!_mq.empty()) loopOnceUnchecked(); }
@@ -57,12 +61,8 @@ public:
         co::this_coroutine::yield();
     }
 
-    template <typename Func, typename ...Args>
-    void post(Func &&func, Args &&...args) {
-        _mq.emplace(_env->createCoroutine(
-            std::forward<Func>(func),
-            std::forward<Args>(args)...
-        ));
+    void post(std::function<void()> func) {
+        _mq.emplace(std::move(func));
     }
 
 private:
@@ -72,7 +72,7 @@ private:
 
 private:
     co::Environment                            *_env {&co::open()};
-    std::queue<std::shared_ptr<co::Coroutine>> _mq;
+    std::queue<std::function<void()>>          _mq;
     int                                        _global {}; // debug
 };
 

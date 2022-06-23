@@ -30,7 +30,7 @@ public:
             _shared->_value = std::forward<T_>(value);
             _shared->_state = State::READY;
             if(_shared->_then) {
-                postRequest();
+                postRequest(nullptr);
             }
         } else if(_shared->_state == State::CANCEL) {
             // ignore
@@ -64,6 +64,28 @@ private:
             shared->_then(static_cast<T&&>(shared->_value));
             shared->_state = State::DONE;
         });
+    }
+
+        // for coroutinue post
+    static void postRetry(Looper *looper,
+                          std::shared_ptr<co::Coroutine> co,
+                          SharedPtr<ControlBlock<T>> shared) {
+        co->resume();
+        if(co->running()) {
+            looper->post([=] {
+                postRetry(looper, co, shared);
+            });
+        } else {
+            shared->_state = State::DONE;
+        }
+    }
+
+    void postRequest(nullptr_t) {
+        _shared->_state = State::POSTED;
+        auto co = _looper->_env->createCoroutine([shared = _shared] {
+            shared->_then(static_cast<T&&>(shared->_value));
+        });
+        _looper->post([=] { postRetry(_looper, co, _shared); });
     }
 
 private:

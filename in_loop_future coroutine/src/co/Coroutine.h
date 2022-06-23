@@ -52,10 +52,10 @@ public:
 public:
 
     // 构造Coroutine执行函数，entry为函数入口，对应传参为arguments...
-    // Note: 出于可重入的考虑，entry强制为值语义
+    // Note: 不可重入
     template <typename Entry, typename ...Args>
-    Coroutine(Environment *master, Entry entry, Args ...arguments)
-        : _entry([=] { entry(/*std::move*/(arguments)...); }),
+    Coroutine(Environment *master, Entry &&entry, Args &&...arguments)
+        : _entry([=] { entry(std::move(arguments)...); }),
           _master(master) {}
 
 private:
@@ -144,10 +144,12 @@ inline bool Coroutine::running() const {
 }
 
 inline const State Coroutine::resume() {
+    if(_runtime & State::EXIT) {
+        return _runtime;
+    }
     if(!(_runtime & State::RUNNING)) {
         _context.prepare(Coroutine::callWhenFinish, this);
         _runtime |= State::RUNNING;
-        _runtime &= ~State::EXIT;
     }
     auto previous = _master->current();
     _master->push(shared_from_this());
