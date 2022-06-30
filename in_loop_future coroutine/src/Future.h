@@ -218,13 +218,14 @@ private:
         State state = _shared->_state;
         if(state == State::NEW || state == State::READY) {
             // async request, will be set value and then callback
-            _shared->_then = [promise = std::move(promise), callback](T &&value) {
-                auto realCallback = [hold = std::move(promise), callback = std::move(callback)](T &&value) mutable {
-                    callback(std::forward<T>(value), std::move(hold));
-                };
-                realCallback(std::forward<T>(value));
+
+            // register request
+            _shared->_then = [promise = std::move(promise), callback](T &&value) mutable {
+                callback(std::forward<T>(value), std::move(promise));
             };
 
+            // value is ready
+            // post request immediately
             if(state == State::READY) {
                 postRequest();
             }
