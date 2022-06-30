@@ -88,9 +88,9 @@ public:
         using ForwardType = typename std::tuple_element<0, typename FunctionTraits<Functor>::ArgsTuple>::type;
         return futureRoutine<T>([f, looper = _looper, count](T &&value, Promise<T> promise) mutable {
             while(count-- && !f(std::forward<ForwardType>(value))) {
-                    looper->yield();
-                }
-                promise.setValue(std::forward<ForwardType>(value));
+                looper->yield();
+            }
+            promise.setValue(std::forward<ForwardType>(value));
         });
     }
 
@@ -124,7 +124,7 @@ public:
               typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnVoid>::type>
     Future<T> wait(size_t count, std::chrono::milliseconds duration, Functor &&f) {
         auto start = std::chrono::system_clock::time_point{};
-        return poll([f = std::forward<Functor>(f), start, duration, remain = count](T &self) mutable {
+        return poll([f, start, duration, remain = count](T &self) mutable {
             auto current = std::chrono::system_clock::now();
             // call once
             if(start == std::chrono::system_clock::time_point{}) {
@@ -164,7 +164,7 @@ public:
               bool ShouldReturnVoid = std::is_same<typename FunctionTraits<Functor>::ReturnType, void>::value,
               typename WaitRequired = typename std::enable_if<AtLeastThenValid && WontAcceptRvalue && ShouldReturnVoid>::type>
     Future<T> wait(std::chrono::system_clock::time_point timePoint, Functor &&f) {
-        return poll([f = std::forward<Functor>(f), timePoint](T &self) mutable {
+        return poll([f, timePoint](T &self) mutable {
             auto current = std::chrono::system_clock::now();
             if(current >= timePoint) {
                 f(self);
@@ -175,14 +175,6 @@ public:
     }
 
 private:
-    void setCallback(const std::function<void(T&&)> &f) {
-        _shared->_then = f;
-    }
-
-    void setCallback(std::function<void(T&&)> &&f) {
-        _shared->_then = std::move(f);
-    }
-
     // unsafe
     // ensure: READY & has then_
     void postRequest() {
@@ -195,6 +187,7 @@ private:
         });
     }
 
+    // Note: WORK IN PROGRESS!
     // for coroutinue post
     static void postRetry(Looper *looper,
                           std::shared_ptr<co::Coroutine> co,
@@ -225,12 +218,12 @@ private:
         State state = _shared->_state;
         if(state == State::NEW || state == State::READY) {
             // async request, will be set value and then callback
-            setCallback([promise = std::move(promise), callback](T &&value) {
+            _shared->_then = [promise = std::move(promise), callback](T &&value) {
                 auto realCallback = [hold = std::move(promise), callback = std::move(callback)](T &&value) mutable {
                     callback(std::forward<T>(value), std::move(hold));
                 };
                 realCallback(std::forward<T>(value));
-            });
+            };
 
             if(state == State::READY) {
                 postRequest();

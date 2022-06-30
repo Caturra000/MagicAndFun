@@ -50,9 +50,12 @@ public:
     // unsafe
     void loopOnceUnchecked() {
         // debug();
-        auto callback = std::move(_mq.front());
+        auto co = std::move(_mq.front());
         _mq.pop();
-        callback();
+        co->resume();
+        if(co->running()) {
+            _mq.emplace(std::move(co));
+        }
     }
 
     void loopOnce() { if(!_mq.empty()) loopOnceUnchecked(); }
@@ -61,8 +64,11 @@ public:
         co::this_coroutine::yield();
     }
 
-    void post(std::function<void()> func) {
-        _mq.emplace(std::move(func));
+    template <typename F, typename ...Args>
+    void post(F &&f, Args &&...args) {
+        _mq.emplace(_env->createCoroutine(
+            std::forward<F>(f),
+            std::forward<Args>(args)...));
     }
 
 private:
@@ -72,7 +78,7 @@ private:
 
 private:
     co::Environment                            *_env {&co::open()};
-    std::queue<std::function<void()>>          _mq;
+    std::queue<std::shared_ptr<co::Coroutine>> _mq;
     int                                        _global {}; // debug
 };
 
