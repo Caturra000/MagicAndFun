@@ -30,7 +30,7 @@ public:
             _shared->_value = std::forward<T_>(value);
             _shared->_state = State::READY;
             if(_shared->_then) {
-                postRequest(nullptr);
+                postRequest();
             }
         } else if(_shared->_state == State::CANCEL) {
             // ignore
