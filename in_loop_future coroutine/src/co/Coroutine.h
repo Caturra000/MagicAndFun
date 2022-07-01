@@ -61,6 +61,12 @@ public:
 private:
     static void callWhenFinish(Coroutine *coroutine);
 
+    template <typename Entry, typename ...Args>
+    void reset(Entry &&entry, Args &&...arguments) {
+        _runtime = {};
+        _entry = [=] { entry(std::move(arguments)...); };
+    }
+
 private:
     State _runtime {};
     Context _context;
@@ -89,11 +95,27 @@ private:
 private:
     std::vector<std::shared_ptr<Coroutine>> _cStack;
     std::shared_ptr<Coroutine> _main;
+
+/// 快速复用
+private:
+    template <typename Entry, typename ...Args>
+    std::shared_ptr<Coroutine> reuse(Entry &&, Args &&...);
+    bool reusable() { return _recycleTop > 0; }
+
+    void recycle(std::shared_ptr<co::Coroutine> trash);
+    bool recyable() { return _recycleTop != _recycleStack.size(); }
+
+private:
+    std::array<std::shared_ptr<co::Coroutine>, 0xff> _recycleStack;
+    size_t _recycleTop {};
 };
 
 
 template <typename Entry, typename ...Args>
 inline std::shared_ptr<Coroutine> Environment::createCoroutine(Entry &&entry, Args &&...arguments) {
+    if(reusable()) {
+        return reuse(std::forward<Entry>(entry), std::forward<Args>(arguments)...);
+    }
     return std::make_shared<Coroutine>(
         this, std::forward<Entry>(entry), std::forward<Args>(arguments)...);
 }
@@ -121,6 +143,17 @@ inline Environment::Environment() {
     push(_main);
 }
 
+
+template <typename Entry, typename ...Args>
+inline auto Environment::reuse(Entry &&entry, Args &&...arguments) -> std::shared_ptr<Coroutine> {
+    auto sp = std::move(_recycleStack[--_recycleTop]);
+    sp->reset(std::forward<Entry>(entry), std::forward<Args>(arguments)...);
+    return sp;
+}
+
+inline void Environment::recycle(std::shared_ptr<co::Coroutine> trash) {
+    _recycleStack[_recycleTop++] = std::move(trash);
+}
 
 
 inline Coroutine& Coroutine::current() {
@@ -170,9 +203,15 @@ inline void Coroutine::yield() {
 inline void Coroutine::callWhenFinish(Coroutine *coroutine) {
     auto &routine = coroutine->_entry;
     auto &runtime = coroutine->_runtime;
+    auto *master = coroutine->_master;
     if(routine) routine();
     runtime ^= (State::EXIT | State::RUNNING);
     // coroutine->yield();
+
+    if(master->recyable()) {
+        master->recycle(coroutine->shared_from_this());
+    }
+
     yield();
 }
 
