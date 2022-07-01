@@ -71,7 +71,7 @@ void contextSwitchOnly(Context* next/*%rdi*/) {
         movq 88(%rdi), %rcx
         movq 96(%rdi), %rbx
 
-        movq 56(%rsi), %rdi
+        movq 56(%rdi), %rdi
 
         movq %rax, (%rsp)
         xorq %rax, %rax
